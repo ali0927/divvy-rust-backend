@@ -1,0 +1,104 @@
+1. HP Account & mint for 6 decimals
+2. New token as USDT for 6 decimals
+
+Init Moneyline Market (3 Options only)
+    Fe will send
+        Accounts:
+            Signer -- Admin
+            Newly created Account for Market
+            Feed Account for Market Side 0
+            Feed Account for Market Side 1
+            Feed Account for Market Side 2
+        Data: 5 for initialization of Market -- u8            
+
+    Rust Code:
+        Read the newly created account
+        Verify the transcation is signed by admin
+        Read the feed accounts for all market sides
+        Store feed keys for all Market Side
+        initialize the data structure with zeros for profit & loss and 3 for result
+
+Init Bet
+    FE will send 
+        Accounts:
+            Signer -- Write
+            Feed Account -- Read
+            Bet account -- Write
+            Market Account -- Write
+            HP State Account -- Write
+            Divvy USDT Account -- Write
+            User USDT Account -- Write
+            Token Program -- Read
+        Data: 2 For initializing the Bet -> u8
+            Risk amount -> u64
+            Odds -> u64
+            Market Side -> u64
+    Rust Code
+        Read the Accounts
+        Verify HP State Account
+        Verify Divvy USDT Account
+        Verify PDA Account
+        Verify the feed account market side
+        Verify Token Program
+        Read & parse the data provided
+        Verify the odds given by feed & FE
+        Verify that market is not settled already
+        Calculate implications of bet on Market
+        Calculate implications of bet on Hp State Account
+        Create a bet slip and insert data in bet account
+        Deduct the tokens from user usdt account 
+        Deposit these tokens to Divv USDT Account
+
+Settle Market
+    FE
+        Accounts:
+            Signer -- Signer
+            Market Account --Write
+            Hp State account -- Write
+            Outcome Feed -- Read
+        Data:
+    Rust
+        Read the accounts
+        Read the feed
+        If feed has result as settled
+            Check if Market is already settled or not
+            if not
+                Settle the market
+                    Relase the liquidity for losers from Market account & from hp account
+                    Set the flag of output in Market account
+            If Yes
+                Reject the transcation
+        If no
+            Reject the transcation
+
+Settle Bet
+    FE
+        Accounts:
+            Signer -- Us as Signer
+            Token Program Account --Read
+            Market Account -- Write
+            Bet Account -- Write
+            Divvy PDA -- Read
+            Divvy USDT Account -- Write
+            User USDT Account -- Write
+            User Main Account -- Read
+            
+            
+           
+
+        Data:
+    Rust
+        Read the accounts
+        Verify if the market is settled
+        If yes
+            Transfer the rent exemption balance to owner of funds (May be Divvy/User)
+            Transfer the payout if any to user's usdt account if user wons
+            Put a flag that bet has been settled
+            Update the hp state for each payout
+            Update the Market state for each payout
+        If no
+            Reject the transcation
+
+            
+
+
