@@ -21,9 +21,10 @@ use crate::{
     error::ExchangeError::{
         BetAlreadySettled, ExpectedDataMismatch, InvalidFeedAccount, InvalidInstruction,
         MarketAlreadySettled, MarketNotInitialized, MarketNotSettled, NotEnoughLiquidity,
-        NotValidResult,
+        NotValidAuthority, NotValidResult,
     },
     instruction::ExchangeInstruction,
+    schema::authority,
     state::{Bet, HpLiquidity, Market},
 };
 
@@ -415,8 +416,9 @@ impl Processor {
 
         //Take rent from source
         //Todo find how I can transfer whole of the balance
-        **bet_state_account.try_borrow_mut_lamports()? -= 1000;
-        **user_main_account.try_borrow_mut_lamports()? += 1000;
+        let balance = bet_state_account.lamports();
+        **bet_state_account.try_borrow_mut_lamports()? -= balance;
+        **user_main_account.try_borrow_mut_lamports()? += balance;
         Bet::pack(bet_state, &mut bet_state_account.data.borrow_mut())?;
         Ok(())
     }
@@ -461,16 +463,20 @@ impl Processor {
     ) -> ProgramResult {
         msg!("Divvy program settle money line market");
         let accounts_iter = &mut accounts.iter();
-        let _initializer = next_account_info(accounts_iter)?;
+        let initializer = next_account_info(accounts_iter)?;
         let market_state_account = next_account_info(accounts_iter)?;
         let hp_state_account = next_account_info(accounts_iter)?;
         let result_account = next_account_info(accounts_iter)?;
+
+        if initializer.key != &authority::ID {
+            return Err(NotValidAuthority.into());
+        }
 
         let mut market_state = Market::unpack_unchecked(&market_state_account.data.borrow())?;
         let mut hp_state = HpLiquidity::unpack_unchecked(&hp_state_account.data.borrow())?;
         //Verifying result account
         if result_account.key != &market_state.result_feed {
-            return Err(InvalidFeedAccount.into());
+            return Err(NotValidAuthority.into());
         }
         //Checking if market is not settled yet
         if market_state.result == 3 {
@@ -523,6 +529,10 @@ impl Processor {
         let pda_account = next_account_info(accounts_iter)?;
         let hp_usdt_account = next_account_info(accounts_iter)?;
         let hp_state_account = next_account_info(accounts_iter)?;
+
+        if initializer.key != &authority::ID {
+            return Err(NotValidAuthority.into());
+        }
 
         msg!("Setting mint authority to PDA");
         let set_mint_authority = spl_token::instruction::set_authority(

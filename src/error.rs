@@ -7,9 +7,9 @@ pub enum ExchangeError {
     /// Invalid instruction
     #[error("Invalid Instruction")]
     InvalidInstruction,
-    /// Not Rent Exempt
-    #[error("Not Rent Exempt")]
-    NotRentExempt,
+    /// Not Valid Authority
+    #[error("Not Valid Authority")]
+    NotValidAuthority,
     /// Expected Amount Mismatch
     #[error("Expected Amount Mismatch")]
     ExpectedAmountMismatch,
