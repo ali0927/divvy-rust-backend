@@ -415,7 +415,6 @@ impl Processor {
         }
 
         //Take rent from source
-        //Todo find how I can transfer whole of the balance
         let balance = bet_state_account.lamports();
         **bet_state_account.try_borrow_mut_lamports()? -= balance;
         **user_main_account.try_borrow_mut_lamports()? += balance;
