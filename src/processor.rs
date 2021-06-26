@@ -60,7 +60,7 @@ impl Processor {
             }
             ExchangeInstruction::InitMoneylineMarket {} => {
                 msg!("Instruction: Init Moneyline Market");
-                Self::process_initmoneylinebet(accounts, program_id)
+                Self::process_initmoneylinemarket(accounts, program_id)
             }
             ExchangeInstruction::SettleMoneylineMarket {} => {
                 msg!("Instruction: Settle Moneyline Market");
@@ -422,7 +422,7 @@ impl Processor {
         Ok(())
     }
 
-    fn process_initmoneylinebet(accounts: &[AccountInfo], _program_id: &Pubkey) -> ProgramResult {
+    fn process_initmoneylinemarket(accounts: &[AccountInfo], _program_id: &Pubkey) -> ProgramResult {
         msg!("Divvy program init market");
         let accounts_iter = &mut accounts.iter();
         let initializer = next_account_info(accounts_iter)?;
