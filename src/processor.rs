@@ -25,7 +25,7 @@ use crate::{
     },
     instruction::ExchangeInstruction,
     schema::authority,
-    state::{Bet, HpLiquidity, Market},
+    state::{Bet, HpLiquidity, Market, MoneylineMarketOutcome},
 };
 
 pub struct Processor;
@@ -241,11 +241,11 @@ impl Processor {
             return Err(MarketNotInitialized.into());
         }
         //Checking if market is not settled yet
-        if market_state.result == 3 {
+        if market_state.result != MoneylineMarketOutcome::NotYetSettled {
             return Err(MarketAlreadySettled.into());
         }
         //Checking if feed account is right
-        if market_state.options_data[market_side].0 != feed_account.key.clone() {
+        if market_state.options_data[market_side].feed_account != feed_account.key.clone() {
             return Err(InvalidFeedAccount.into());
         }
 
@@ -263,35 +263,41 @@ impl Processor {
         //Calculate impact of the bet on market risk
         let current_max_loss = market_state.max_loss;
         //Add risk & gain in market
-        let current_market_side_loss = market_state.options_data[market_side].1;
-        let current_market_side_win = market_state.options_data[market_side].2;
-        market_state.options_data[market_side].1 = current_market_side_loss + risk;
-        market_state.options_data[market_side].2 = current_market_side_win + amount;
+        let current_market_side_loss = market_state.options_data[market_side].potentia_loss;
+        let current_market_side_win = market_state.options_data[market_side].potential_win;
+        market_state.options_data[market_side].potentia_loss = current_market_side_loss + risk;
+        market_state.options_data[market_side].potential_win = current_market_side_win + amount;
 
         //Calculating max loss
         let mut loss_side_0 = 0;
-        if market_state.options_data[0].1
-            - (market_state.options_data[1].2 + market_state.options_data[2].2)
+        if market_state.options_data[0].potentia_loss
+            - (market_state.options_data[1].potential_win
+                + market_state.options_data[2].potential_win)
             > 0
         {
-            loss_side_0 = market_state.options_data[0].1
-                - (market_state.options_data[1].2 + market_state.options_data[2].2)
+            loss_side_0 = market_state.options_data[0].potentia_loss
+                - (market_state.options_data[1].potential_win
+                    + market_state.options_data[2].potential_win)
         };
         let mut loss_side_1 = 0;
-        if market_state.options_data[1].1
-            - (market_state.options_data[0].2 + market_state.options_data[2].2)
+        if market_state.options_data[1].potentia_loss
+            - (market_state.options_data[0].potential_win
+                + market_state.options_data[2].potential_win)
             > 0
         {
-            loss_side_1 = market_state.options_data[1].1
-                - (market_state.options_data[0].2 + market_state.options_data[2].2);
+            loss_side_1 = market_state.options_data[1].potentia_loss
+                - (market_state.options_data[0].potential_win
+                    + market_state.options_data[2].potential_win);
         }
         let mut loss_side_2 = 0;
-        if market_state.options_data[2].1
-            - (market_state.options_data[0].2 + market_state.options_data[1].2)
+        if market_state.options_data[2].potentia_loss
+            - (market_state.options_data[0].potential_win
+                + market_state.options_data[1].potential_win)
             > 0
         {
-            loss_side_2 = market_state.options_data[2].1
-                - (market_state.options_data[0].2 + market_state.options_data[1].2);
+            loss_side_2 = market_state.options_data[2].potentia_loss
+                - (market_state.options_data[0].potential_win
+                    + market_state.options_data[1].potential_win);
         }
         let loss_arr = [loss_side_0, loss_side_1, loss_side_2];
         let new_max_loss = loss_arr.iter().max().unwrap();
@@ -372,7 +378,7 @@ impl Processor {
             return Err(ExpectedDataMismatch.into());
         }
 
-        if market_state.result != 3 {
+        if market_state.result != MoneylineMarketOutcome::NotYetSettled {
             return Err(MarketNotSettled.into());
         }
 
@@ -388,7 +394,7 @@ impl Processor {
             return Err(BetAlreadySettled.into());
         }
 
-        if bet_state.user_market_side == market_state.result {
+        if bet_state.user_market_side == market_state.result.pack() {
             bet_state.outcome = 1; //User have won
             let amount_to_transfer = bet_state.user_risk + bet_state.user_potential_win;
             let transfer_instruction = transfer(
@@ -439,18 +445,18 @@ impl Processor {
         msg!("Initializing market as required. Result as 3 means market is not settled yet");
         let mut market_state = Market::unpack_unchecked(&market_state_account.data.borrow())?;
         market_state.is_initialized = true;
-        market_state.options_data[0].0 = market_side_0_feed_account.key.clone();
-        market_state.options_data[0].1 = 0;
-        market_state.options_data[0].2 = 0;
-        market_state.options_data[1].0 = market_side_1_feed_account.key.clone();
-        market_state.options_data[1].1 = 0;
-        market_state.options_data[1].2 = 0;
-        market_state.options_data[2].0 = market_side_2_feed_account.key.clone();
-        market_state.options_data[2].1 = 0;
-        market_state.options_data[2].2 = 0;
+        market_state.options_data[0].feed_account = market_side_0_feed_account.key.clone();
+        market_state.options_data[0].potentia_loss = 0;
+        market_state.options_data[0].potential_win = 0;
+        market_state.options_data[1].feed_account = market_side_1_feed_account.key.clone();
+        market_state.options_data[1].potentia_loss = 0;
+        market_state.options_data[1].potential_win = 0;
+        market_state.options_data[2].feed_account = market_side_2_feed_account.key.clone();
+        market_state.options_data[2].potentia_loss = 0;
+        market_state.options_data[2].potential_win = 0;
         market_state.max_loss = 0;
         market_state.result_feed = result_feed_account.key.clone();
-        market_state.result = 3;
+        market_state.result = MoneylineMarketOutcome::NotYetSettled;
         Market::pack(market_state, &mut market_state_account.data.borrow_mut())?;
 
         Ok(())
@@ -478,34 +484,37 @@ impl Processor {
             return Err(NotValidAuthority.into());
         }
         //Checking if market is not settled yet
-        if market_state.result == 3 {
+        if market_state.result != MoneylineMarketOutcome::NotYetSettled {
             return Err(MarketAlreadySettled.into());
         }
         //Getting odds from the Switchboard
         let aggregator: AggregatorState = get_aggregator(result_account)?;
         let round_result: RoundResult = get_aggregator_result(&aggregator)?;
-        let result = round_result.result.expect("Invalid feed") as i32;
-        if result > 3 || result < 0 {
+        let result_u8 = round_result.result.expect("Invalid feed") as u8;
+        if result_u8 > 2 {
             return Err(NotValidResult.into());
         } else {
-            let net_value = match result {
-                0 => {
-                    market_state.options_data[0].1
-                        - (market_state.options_data[1].2 + market_state.options_data[2].2)
+            market_state.result = MoneylineMarketOutcome::unpack(&result_u8).unwrap();
+            let net_value = match market_state.result {
+                MoneylineMarketOutcome::MarketSide0Won => {
+                    market_state.options_data[0].potentia_loss
+                        - (market_state.options_data[1].potential_win
+                            + market_state.options_data[2].potential_win)
                 }
-                1 => {
-                    market_state.options_data[1].1
-                        - (market_state.options_data[0].2 + market_state.options_data[2].2)
+                MoneylineMarketOutcome::MarketSide1Won => {
+                    market_state.options_data[1].potentia_loss
+                        - (market_state.options_data[0].potential_win
+                            + market_state.options_data[2].potential_win)
                 }
-                2 => {
-                    market_state.options_data[2].1
-                        - (market_state.options_data[0].2 + market_state.options_data[1].2)
+                MoneylineMarketOutcome::MarketSide2Won => {
+                    market_state.options_data[2].potentia_loss
+                        - (market_state.options_data[0].potential_win
+                            + market_state.options_data[1].potential_win)
                 }
                 _ => {
                     return Err(InvalidInstruction.into());
                 }
             };
-            market_state.result = result as u8;
             let current_amount_blocked = market_state.max_loss;
             let current_liquidity = hp_state.available_liquidity;
             hp_state.available_liquidity = current_liquidity + current_amount_blocked - net_value;

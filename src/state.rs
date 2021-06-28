@@ -6,12 +6,49 @@ use solana_program::{
 
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 
+use crate::error::ExchangeError::InvalidInstruction;
+
+pub struct MarketSide {
+    pub feed_account: Pubkey,
+    pub potentia_loss: u64,
+    pub potential_win: u64,
+}
+
+#[derive(PartialEq)]
+pub enum MoneylineMarketOutcome {
+    MarketSide0Won,
+    MarketSide1Won,
+    MarketSide2Won,
+    NotYetSettled,
+}
+
+impl MoneylineMarketOutcome {
+    pub fn unpack(input: &u8) -> Result<Self, ProgramError> {
+        Ok(match input {
+            0 => Self::MarketSide0Won,
+            1 => Self::MarketSide1Won,
+            2 => Self::MarketSide2Won,
+            3 => Self::NotYetSettled,
+            _ => return Err(InvalidInstruction.into()),
+        })
+    }
+
+    pub fn pack(&self) -> u8 {
+        match *self {
+            MoneylineMarketOutcome::MarketSide0Won => 0,
+            MoneylineMarketOutcome::MarketSide1Won => 1,
+            MoneylineMarketOutcome::MarketSide2Won => 2,
+            MoneylineMarketOutcome::NotYetSettled => 3,
+        }
+    }
+}
+
 pub struct Market {
     pub is_initialized: bool,
-    pub options_data: [(Pubkey, u64, u64); 3],
+    pub options_data: [MarketSide; 3],
     pub max_loss: u64,
     pub result_feed: Pubkey,
-    pub result: u8,
+    pub result: MoneylineMarketOutcome,
 }
 
 pub struct HpLiquidity {
@@ -81,25 +118,25 @@ impl Pack for Market {
         Ok(Market {
             is_initialized,
             options_data: [
-                (
-                    Pubkey::new_from_array(*option_0_pubkey),
-                    u64::from_le_bytes(*option_0_loss),
-                    u64::from_le_bytes(*option_0_win),
-                ),
-                (
-                    Pubkey::new_from_array(*option_1_pubkey),
-                    u64::from_le_bytes(*option_1_loss),
-                    u64::from_le_bytes(*option_1_win),
-                ),
-                (
-                    Pubkey::new_from_array(*option_2_pubkey),
-                    u64::from_le_bytes(*option_2_loss),
-                    u64::from_le_bytes(*option_2_win),
-                ),
+                MarketSide {
+                    feed_account: Pubkey::new_from_array(*option_0_pubkey),
+                    potentia_loss: u64::from_le_bytes(*option_0_loss),
+                    potential_win: u64::from_le_bytes(*option_0_win),
+                },
+                MarketSide {
+                    feed_account: Pubkey::new_from_array(*option_1_pubkey),
+                    potentia_loss: u64::from_le_bytes(*option_1_loss),
+                    potential_win: u64::from_le_bytes(*option_1_win),
+                },
+                MarketSide {
+                    feed_account: Pubkey::new_from_array(*option_2_pubkey),
+                    potentia_loss: u64::from_le_bytes(*option_2_loss),
+                    potential_win: u64::from_le_bytes(*option_2_win),
+                },
             ],
             max_loss: u64::from_le_bytes(*max_loss),
             result_feed: Pubkey::new_from_array(*result_feed),
-            result: u8::from_le_bytes(*result),
+            result: MoneylineMarketOutcome::unpack(&(u8::from_le_bytes(*result))).unwrap(),
         })
     }
 
@@ -130,18 +167,19 @@ impl Pack for Market {
         } = self;
 
         is_initialized_dst[0] = *is_initialized as u8;
-        option_0_pubkey_dst.copy_from_slice(options_data[0].0.as_ref());
-        *option_0_loss_dst = options_data[0].1.to_le_bytes();
-        *option_0_win_dst = options_data[0].2.to_le_bytes();
-        option_1_pubkey_dst.copy_from_slice(options_data[1].0.as_ref());
-        *option_1_loss_dst = options_data[1].1.to_le_bytes();
-        *option_1_win_dst = options_data[1].2.to_le_bytes();
-        option_2_pubkey_dst.copy_from_slice(options_data[2].0.as_ref());
-        *option_2_loss_dst = options_data[2].1.to_le_bytes();
-        *option_2_win_dst = options_data[2].2.to_le_bytes();
+        option_0_pubkey_dst.copy_from_slice(options_data[0].feed_account.as_ref());
+        *option_0_loss_dst = options_data[0].potentia_loss.to_le_bytes();
+        *option_0_win_dst = options_data[0].potential_win.to_le_bytes();
+        option_1_pubkey_dst.copy_from_slice(options_data[1].feed_account.as_ref());
+        *option_1_loss_dst = options_data[1].potentia_loss.to_le_bytes();
+        *option_1_win_dst = options_data[1].potential_win.to_le_bytes();
+        option_2_pubkey_dst.copy_from_slice(options_data[2].feed_account.as_ref());
+        *option_2_loss_dst = options_data[2].potentia_loss.to_le_bytes();
+        *option_2_win_dst = options_data[2].potential_win.to_le_bytes();
         *max_loss_dst = max_loss.to_le_bytes();
         result_feed_dst.copy_from_slice(result_feed.as_ref());
-        *result_dst = result.to_le_bytes();
+        let result_u8 = result.pack();
+        *result_dst = result_u8.to_le_bytes();
     }
 }
 
