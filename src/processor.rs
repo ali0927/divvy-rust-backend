@@ -214,7 +214,7 @@ impl Processor {
         accounts: &[AccountInfo],
         amount: u64,
         odds: u64,
-        market_side: usize,
+        market_side: u64,
         _program_id: &Pubkey,
     ) -> ProgramResult {
         msg!(
@@ -246,7 +246,8 @@ impl Processor {
             return Err(MarketAlreadySettled.into());
         }
         //Checking if feed account is right
-        if market_state.options_data[market_side].feed_account != feed_account.key.clone() {
+        if market_state.options_data[market_side as usize].feed_account != feed_account.key.clone()
+        {
             return Err(InvalidFeedAccount.into());
         }
 
@@ -264,10 +265,13 @@ impl Processor {
         //Calculate impact of the bet on market risk
         let current_max_loss = market_state.max_loss;
         //Add risk & gain in market
-        let current_market_side_loss = market_state.options_data[market_side].potentia_loss;
-        let current_market_side_win = market_state.options_data[market_side].potential_win;
-        market_state.options_data[market_side].potentia_loss = current_market_side_loss + risk;
-        market_state.options_data[market_side].potential_win = current_market_side_win + amount;
+        let current_market_side_loss =
+            market_state.options_data[market_side as usize].potentia_loss;
+        let current_market_side_win = market_state.options_data[market_side as usize].potential_win;
+        market_state.options_data[market_side as usize].potentia_loss =
+            current_market_side_loss + risk;
+        market_state.options_data[market_side as usize].potential_win =
+            current_market_side_win + amount;
 
         //Calculating max loss
         let mut loss_side_0 = 0;
@@ -352,7 +356,6 @@ impl Processor {
         if odds < 0.0 {
             return (100.0 / (odds * -1.0) * amount as f64) as u64;
         } else {
-            //return ((100.0 / odds).round() as u64) * amount;
             return ((odds * amount as f64) / 100.0) as u64;
         }
     }

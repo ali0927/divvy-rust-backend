@@ -19,7 +19,7 @@ pub enum ExchangeInstruction {
     Initbet {
         amount: u64,
         odds: u64,
-        market_side: usize,
+        market_side: u64,
     },
     //Settle Bet
     Settle {
@@ -89,11 +89,11 @@ impl ExchangeInstruction {
         Ok(odds)
     }
 
-    fn unpack_market_side(input: &[u8]) -> Result<usize, ProgramError> {
+    fn unpack_market_side(input: &[u8]) -> Result<u64, ProgramError> {
         let market_side = input
             .get(8..16)
             .and_then(|slice| slice.try_into().ok())
-            .map(usize::from_le_bytes)
+            .map(u64::from_le_bytes)
             .ok_or(InvalidInstruction)?;
         Ok(market_side)
     }
