@@ -350,9 +350,10 @@ impl Processor {
 
     fn calculate_risk(odds: f64, amount: u64) -> u64 {
         if odds < 0.0 {
-            return ((odds / 100.0).round() as u64) * amount;
+            return (100.0 / (odds * -1.0) * amount as f64) as u64;
         } else {
-            return ((100.0 / odds).round() as u64) * amount;
+            //return ((100.0 / odds).round() as u64) * amount;
+            return ((odds * amount as f64) / 100.0) as u64;
         }
     }
 
