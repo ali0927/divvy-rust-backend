@@ -130,7 +130,7 @@ impl Processor {
         invoke_signed(
             &mint_ix,
             &[mint.clone(), token_account.clone(), pda_account.clone()],
-            &[&[&b"divvyexchange"[..], &[bump_seed]]],
+            &[&[b"divvyexchange", &[bump_seed]]],
         )?;
 
         msg!("Adding deposit to liquidity");
@@ -199,7 +199,7 @@ impl Processor {
                 pda_account.clone(),
                 token_program.clone(),
             ],
-            &[&[&b"divvyexchange"[..], &[bump_seed]]],
+            &[&[b"divvyexchange", &[bump_seed]]],
         )?;
 
         msg!("Subtracting withdrawal from liquidity");
@@ -383,7 +383,7 @@ impl Processor {
             return Err(ExpectedDataMismatch.into());
         }
 
-        if market_state.result != MoneylineMarketOutcome::NotYetSettled {
+        if market_state.result == MoneylineMarketOutcome::NotYetSettled {
             return Err(MarketNotSettled.into());
         }
 
@@ -410,7 +410,7 @@ impl Processor {
                 &[&pda_account.key],
                 amount_to_transfer,
             )?;
-            msg!("Calling the token program to transfer tokens to user");
+            msg!("Calling the token program to transfer winnings to user");
             invoke_signed(
                 &transfer_instruction,
                 &[
@@ -419,7 +419,8 @@ impl Processor {
                     pda_account.clone(),
                     token_program.clone(),
                 ],
-                &[&[&b"divvyexchange"[..], &[bump_seed]]],
+                //To Do Please test bump seed thing
+                &[&[b"divvyexchange", &[bump_seed]]],
             )?;
         } else {
             bet_state.outcome = 2; //User have lost

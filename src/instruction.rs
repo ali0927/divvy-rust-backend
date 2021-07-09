@@ -91,7 +91,7 @@ impl ExchangeInstruction {
 
     fn unpack_market_side(input: &[u8]) -> Result<u64, ProgramError> {
         let market_side = input
-            .get(8..16)
+            .get(16..24)
             .and_then(|slice| slice.try_into().ok())
             .map(u64::from_le_bytes)
             .ok_or(InvalidInstruction)?;
