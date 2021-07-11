@@ -1,0 +1,18 @@
+{
+    "dependencies": {
+        "@solana/spl-token": "^0.1.6",
+        "@solana/web3.js": "^1.19.0",
+        "@switchboard-xyz/switchboard-api": "^0.2.105",
+        "@types/yargs": "^17.0.0",
+        "axios": "^0.21.1",
+        "buffer-layout": "^1.2.1",
+        "mysql": "^2.18.1",
+        "mysql2": "^2.2.5",
+        "resolve-dir": "^1.0.1",
+        "yargs": "github:yargs/yargs"
+    },
+    "devDependencies": {
+        "@types/mysql": "^2.15.18",
+        "@types/node": "^15.12.4"
+    }
+}

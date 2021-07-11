@@ -19,9 +19,6 @@ pub enum ExchangeError {
     /// Amount Overflow
     #[error("Amount Overflow")]
     AmountOverflow,
-    /// Market not initialized
-    #[error("Market not initialized")]
-    MarketNotInitialized,
     /// Market already settled
     #[error("Market already settled")]
     MarketAlreadySettled,
@@ -37,13 +34,20 @@ pub enum ExchangeError {
     /// Invalid feed account
     #[error("Invalid feed account")]
     InvalidFeedAccount,
-    #[error("Feed not initialized")]
-    FeedNotInitialized,
     /// Not enough liquidity
     #[error("Not enough liquidity")]
     NotEnoughLiquidity,
+
+    // Initialized errors
+    #[error("HP liquidity already initialized")]
+    HpLiquidityAlreadyInitialized,
+    #[error("Market not initialized")]
+    MarketNotInitialized,
     #[error("Bet already initialized")]
     BetAlreadyInitialized,
+    #[error("Feed not initialized")]
+    FeedNotInitialized,
+
     #[error("Market side risk underflow.")]
     MarketSideRiskUnderflow,
     #[error("Market side payout underflow.")]
