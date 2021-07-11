@@ -6,23 +6,23 @@ use crate::error::ExchangeError::InvalidInstruction;
 pub enum ExchangeInstruction {
     Deposit {
         /// The amount party A expects to receive of token Y
-        amount: u64,
+        usdt_amount: u64,
         bump_seed: u8,
     },
     Withdraw {
         /// the amount the taker expects to be paid in the other token, as a u64 because that's the max possible supply of a token
-        amount: u64,
+        ht_amount: u64,
         bump_seed: u8,
     },
 
     //Init Bet
     Initbet {
-        amount: u64,
+        risk: u64,
         odds: u64,
-        market_side: u64,
+        market_side: u8,
     },
     //Settle Bet
-    Settle {
+    SettleBet {
         bump_seed: u8,
     },
     //Init Moneyline Market
@@ -42,19 +42,19 @@ impl ExchangeInstruction {
         let (tag, rest) = input.split_first().ok_or(InvalidInstruction)?;
         Ok(match tag {
             0 => Self::Deposit {
-                amount: Self::unpack_amount(rest)?,
+                usdt_amount: Self::unpack_amount(rest)?,
                 bump_seed: Self::unpack_last(rest)?,
             },
             1 => Self::Withdraw {
-                amount: Self::unpack_amount(rest)?,
+                ht_amount: Self::unpack_amount(rest)?,
                 bump_seed: Self::unpack_last(rest)?,
             },
             2 => Self::Initbet {
-                amount: Self::unpack_amount(rest)?,
+                risk: Self::unpack_amount(rest)?,
                 odds: Self::unpack_odds(rest)?,
                 market_side: Self::unpack_market_side(rest)?,
             },
-            3 => Self::Settle {
+            3 => Self::SettleBet {
                 bump_seed: Self::unpack_last(rest)?,
             },
             4 => Self::InitMoneylineMarket,
@@ -89,11 +89,11 @@ impl ExchangeInstruction {
         Ok(odds)
     }
 
-    fn unpack_market_side(input: &[u8]) -> Result<u64, ProgramError> {
+    fn unpack_market_side(input: &[u8]) -> Result<u8, ProgramError> {
         let market_side = input
-            .get(16..24)
+            .get(16..17)
             .and_then(|slice| slice.try_into().ok())
-            .map(u64::from_le_bytes)
+            .map(u8::from_le_bytes)
             .ok_or(InvalidInstruction)?;
         Ok(market_side)
     }

@@ -8,19 +8,6 @@ use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 
 use crate::error::ExchangeError::InvalidInstruction;
 
-pub struct MarketSide {
-    pub feed_account: Pubkey,
-    pub potentia_loss: u64,
-    pub potential_win: u64,
-}
-
-#[derive(PartialEq)]
-pub enum MoneylineMarketOutcome {
-    MarketSide0Won,
-    MarketSide1Won,
-    MarketSide2Won,
-    NotYetSettled,
-}
 
 impl MoneylineMarketOutcome {
     pub fn unpack(input: &u8) -> Result<Self, ProgramError> {
@@ -45,15 +32,27 @@ impl MoneylineMarketOutcome {
 
 pub struct Market {
     pub is_initialized: bool,
-    pub options_data: [MarketSide; 3],
-    pub max_loss: u64,
+    pub market_sides: [MarketSide; 3],
+    pub locked_liquidity: u64,
     pub result_feed: Pubkey,
     pub result: MoneylineMarketOutcome,
+    /// The amount of risk the bettors have entered into the market.
+    /// When the market settles, this equals to the winning sides unsettled risk and payout
+    pub bettor_balance: u64,
+    pub pending_bets: u64,
+}
+
+pub struct MarketSide {
+    pub feed_account: Pubkey,
+    pub payout: u64,
+    pub risk: u64,
 }
 
 pub struct HpLiquidity {
     pub is_initialized: bool,
     pub available_liquidity: u64,
+    pub bettor_balance: u64,
+    pub pending_bets: u64,
 }
 
 pub struct Bet {
@@ -62,9 +61,17 @@ pub struct Bet {
     pub user_usdt_account: Pubkey,
     pub user_main_account: Pubkey,
     pub user_risk: u64,
-    pub user_potential_win: u64,
+    pub user_payout: u64,
     pub user_market_side: u8,
     pub outcome: u8,
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum MoneylineMarketOutcome {
+    MarketSide0Won,
+    MarketSide1Won,
+    MarketSide2Won,
+    NotYetSettled,
 }
 
 impl Sealed for Market {}
@@ -92,7 +99,7 @@ impl IsInitialized for Bet {
 }
 
 impl Pack for Market {
-    const LEN: usize = 186;
+    const LEN: usize = 202;
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let src = array_ref![src, 0, Market::LEN];
         let (
@@ -106,10 +113,12 @@ impl Pack for Market {
             option_2_pubkey,
             option_2_loss,
             option_2_win,
-            max_loss,
+            locked_liquidity,
             result_feed,
             result,
-        ) = array_refs![src, 1, 32, 8, 8, 32, 8, 8, 32, 8, 8, 8, 32, 1];
+            user_risk,
+            pending_bets,
+        ) = array_refs![src, 1, 32, 8, 8, 32, 8, 8, 32, 8, 8, 8, 32, 1, 8, 8];
         let is_initialized = match is_initialized {
             [0] => false,
             [1] => true,
@@ -117,26 +126,28 @@ impl Pack for Market {
         };
         Ok(Market {
             is_initialized,
-            options_data: [
+            market_sides: [
                 MarketSide {
                     feed_account: Pubkey::new_from_array(*option_0_pubkey),
-                    potentia_loss: u64::from_le_bytes(*option_0_loss),
-                    potential_win: u64::from_le_bytes(*option_0_win),
+                    payout: u64::from_le_bytes(*option_0_loss),
+                    risk: u64::from_le_bytes(*option_0_win),
                 },
                 MarketSide {
                     feed_account: Pubkey::new_from_array(*option_1_pubkey),
-                    potentia_loss: u64::from_le_bytes(*option_1_loss),
-                    potential_win: u64::from_le_bytes(*option_1_win),
+                    payout: u64::from_le_bytes(*option_1_loss),
+                    risk: u64::from_le_bytes(*option_1_win),
                 },
                 MarketSide {
                     feed_account: Pubkey::new_from_array(*option_2_pubkey),
-                    potentia_loss: u64::from_le_bytes(*option_2_loss),
-                    potential_win: u64::from_le_bytes(*option_2_win),
+                    payout: u64::from_le_bytes(*option_2_loss),
+                    risk: u64::from_le_bytes(*option_2_win),
                 },
             ],
-            max_loss: u64::from_le_bytes(*max_loss),
+            locked_liquidity: u64::from_le_bytes(*locked_liquidity),
             result_feed: Pubkey::new_from_array(*result_feed),
             result: MoneylineMarketOutcome::unpack(&(u8::from_le_bytes(*result))).unwrap(),
+            bettor_balance: u64::from_le_bytes(*user_risk),
+            pending_bets: u64::from_le_bytes(*pending_bets),
         })
     }
 
@@ -156,38 +167,48 @@ impl Pack for Market {
             max_loss_dst,
             result_feed_dst,
             result_dst,
-        ) = mut_array_refs![dst, 1, 32, 8, 8, 32, 8, 8, 32, 8, 8, 8, 32, 1];
-
+            user_risk_dst,
+            pending_bets_dst,
+        ) = mut_array_refs![dst, 1, 32, 8, 8, 32, 8, 8, 32, 8, 8, 8, 32, 1, 8, 8];
+        
         let Market {
             is_initialized,
-            options_data,
-            max_loss,
+            market_sides,
+            locked_liquidity,
             result_feed,
             result,
+            bettor_balance: user_risk,
+            pending_bets,
         } = self;
-
+        
         is_initialized_dst[0] = *is_initialized as u8;
-        option_0_pubkey_dst.copy_from_slice(options_data[0].feed_account.as_ref());
-        *option_0_loss_dst = options_data[0].potentia_loss.to_le_bytes();
-        *option_0_win_dst = options_data[0].potential_win.to_le_bytes();
-        option_1_pubkey_dst.copy_from_slice(options_data[1].feed_account.as_ref());
-        *option_1_loss_dst = options_data[1].potentia_loss.to_le_bytes();
-        *option_1_win_dst = options_data[1].potential_win.to_le_bytes();
-        option_2_pubkey_dst.copy_from_slice(options_data[2].feed_account.as_ref());
-        *option_2_loss_dst = options_data[2].potentia_loss.to_le_bytes();
-        *option_2_win_dst = options_data[2].potential_win.to_le_bytes();
-        *max_loss_dst = max_loss.to_le_bytes();
+        option_0_pubkey_dst.copy_from_slice(market_sides[0].feed_account.as_ref());
+        *option_0_loss_dst = market_sides[0].payout.to_le_bytes();
+        *option_0_win_dst = market_sides[0].risk.to_le_bytes();
+        option_1_pubkey_dst.copy_from_slice(market_sides[1].feed_account.as_ref());
+        *option_1_loss_dst = market_sides[1].payout.to_le_bytes();
+        *option_1_win_dst = market_sides[1].risk.to_le_bytes();
+        option_2_pubkey_dst.copy_from_slice(market_sides[2].feed_account.as_ref());
+        *option_2_loss_dst = market_sides[2].payout.to_le_bytes();
+        *option_2_win_dst = market_sides[2].risk.to_le_bytes();
+        *max_loss_dst = locked_liquidity.to_le_bytes();
         result_feed_dst.copy_from_slice(result_feed.as_ref());
-        let result_u8 = result.pack();
-        *result_dst = result_u8.to_le_bytes();
+        *result_dst = result.pack().to_le_bytes();
+        *user_risk_dst = user_risk.to_le_bytes();
+        *pending_bets_dst = pending_bets.to_le_bytes();
     }
 }
 
 impl Pack for HpLiquidity {
-    const LEN: usize = 9;
+    const LEN: usize = 25;
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let src = array_ref![src, 0, HpLiquidity::LEN];
-        let (is_initialized, available_liquidity) = array_refs![src, 1, 8];
+        let (
+            is_initialized,
+            available_liquidity,
+            user_risk,
+            pending_bets,
+        ) = array_refs![src, 1, 8, 8, 8];
         let is_initialized = match is_initialized {
             [0] => false,
             [1] => true,
@@ -196,19 +217,31 @@ impl Pack for HpLiquidity {
         Ok(HpLiquidity {
             is_initialized,
             available_liquidity: u64::from_le_bytes(*available_liquidity),
+            bettor_balance: u64::from_le_bytes(*user_risk),
+            pending_bets: u64::from_le_bytes(*pending_bets),
         })
+
     }
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let dst = array_mut_ref![dst, 0, HpLiquidity::LEN];
-        let (is_initialized_dst, available_liquidity_dst) = mut_array_refs![dst, 1, 8];
+        let (
+            is_initialized_dst, 
+            available_liquidity_dst,
+            user_risk_dst,
+            pending_bets_dst,
+        ) = mut_array_refs![dst, 1, 8, 8, 8];
 
         let HpLiquidity {
             is_initialized,
             available_liquidity,
+            bettor_balance: user_risk,
+            pending_bets,
         } = self;
         is_initialized_dst[0] = *is_initialized as u8;
         *available_liquidity_dst = available_liquidity.to_le_bytes();
+        *user_risk_dst = user_risk.to_le_bytes();
+        *pending_bets_dst = pending_bets.to_le_bytes();
     }
 }
 
@@ -222,7 +255,7 @@ impl Pack for Bet {
             user_usdt_account,
             user_main_account,
             user_risk,
-            user_potential_win,
+            user_payout,
             user_market_side,
             outcome,
         ) = array_refs![src, 1, 32, 32, 32, 8, 8, 1, 1];
@@ -237,7 +270,7 @@ impl Pack for Bet {
             user_usdt_account: Pubkey::new_from_array(*user_usdt_account),
             user_main_account: Pubkey::new_from_array(*user_main_account),
             user_risk: u64::from_le_bytes(*user_risk),
-            user_potential_win: u64::from_le_bytes(*user_potential_win),
+            user_payout: u64::from_le_bytes(*user_payout),
             user_market_side: u8::from_le_bytes(*user_market_side),
             outcome: u8::from_le_bytes(*outcome),
         })
@@ -251,7 +284,7 @@ impl Pack for Bet {
             user_usdt_account_dst,
             user_main_account_dst,
             user_risk_dst,
-            user_potential_win_dst,
+            user_payout_dst,
             user_market_side_dst,
             outcome_dst,
         ) = mut_array_refs![dst, 1, 32, 32, 32, 8, 8, 1, 1];
@@ -262,7 +295,7 @@ impl Pack for Bet {
             user_usdt_account,
             user_main_account,
             user_risk,
-            user_potential_win,
+            user_payout,
             user_market_side,
             outcome,
         } = self;
@@ -272,7 +305,7 @@ impl Pack for Bet {
         user_usdt_account_dst.copy_from_slice(user_usdt_account.as_ref());
         user_main_account_dst.copy_from_slice(user_main_account.as_ref());
         *user_risk_dst = user_risk.to_le_bytes();
-        *user_potential_win_dst = user_potential_win.to_le_bytes();
+        *user_payout_dst = user_payout.to_le_bytes();
         *user_market_side_dst = user_market_side.to_le_bytes();
         *outcome_dst = outcome.to_le_bytes();
     }
