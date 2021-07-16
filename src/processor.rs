@@ -89,13 +89,21 @@ impl Processor {
 
         let mut hp_state = HpLiquidity::unpack(&hp_state_account.data.borrow())?;
         let hp_mint_state = TokenMint::unpack(&hp_mint_account.data.borrow())?;
-    
-        let conversion_ratio = hp_mint_state.supply as f64 / hp_state.available_liquidity as f64;
-        let ht_amount = (usdt_amount as f64 * conversion_ratio).floor() as u64;
-        
-        msg!("- USDT amount");
+
+        msg!("- USDT amount deposited");
         msg!(0, 0, 0, 0, usdt_amount);
-        msg!("- HT amount");
+        msg!("- HT supply in circulation");
+        msg!(0, 0, 0, 0, hp_mint_state.supply);
+        msg!("- House pool balance");
+        msg!(0, 0, 0, 0, hp_state.available_liquidity);
+    
+        let conversion_ratio = match hp_state.available_liquidity {
+            0 => 1f64,
+            _ => hp_mint_state.supply as f64 / hp_state.available_liquidity as f64,
+        };
+        let ht_amount = (usdt_amount as f64 * conversion_ratio) as u64;
+        
+        msg!("- HT amount received");
         msg!(0, 0, 0, 0, ht_amount);
 
         //let (_pda, bump_seed) = Pubkey::find_program_address(&[b"divvyexchange"], program_id);
@@ -134,8 +142,8 @@ impl Processor {
             &[&[b"divvyexchange", &[bump_seed]]],
         )?;
 
-        msg!("Adding deposit to liquidity");
         hp_state.available_liquidity = hp_state.available_liquidity + usdt_amount;
+        msg!("Adding deposit to liquidity");
         HpLiquidity::pack(hp_state, &mut hp_state_account.data.borrow_mut())?;
 
         Ok(())
@@ -161,16 +169,25 @@ impl Processor {
 
         let mut hp_state = HpLiquidity::unpack(&hp_state_account.data.borrow())?;
         let hp_mint_state = TokenMint::unpack(&hp_mint_account.data.borrow())?;
-    
-        let conversion_ratio = hp_state.available_liquidity as f64 / hp_mint_state.supply as f64;
-        let usdt_amount = (ht_amount as f64 * conversion_ratio).floor() as u64;
 
-        msg!("- USDT amount");
-        msg!(0, 0, 0, 0, usdt_amount);
-        msg!("- HT amount");
+        msg!("- HT amount burned");
         msg!(0, 0, 0, 0, ht_amount);
+        msg!("- HT supply in circulation");
+        msg!(0, 0, 0, 0, hp_mint_state.supply);
+        msg!("- House pool balance");
+        msg!(0, 0, 0, 0, hp_state.available_liquidity);
 
-        //Burn the transfers
+        let conversion_ratio = hp_state.available_liquidity as f64 / hp_mint_state.supply as f64;
+        let usdt_amount = (ht_amount as f64 * conversion_ratio) as u64;
+
+        msg!("- USDT amount received");
+        msg!(0, 0, 0, 0, usdt_amount);
+
+        msg!("Subtracting withdrawal from liquidity");
+        hp_state.available_liquidity = hp_state.available_liquidity - usdt_amount;
+        HpLiquidity::pack(hp_state, &mut hp_state_account.data.borrow_mut())?;
+
+        msg!("Burning HT");
         let burn_tx = burn(
             &token_program.key,
             &user_hp_account.key,
@@ -190,7 +207,7 @@ impl Processor {
             ],
         )?;
 
-        //Transfer Withdraw
+        msg!("Transfering USDT to the user");
         let transfer_instruction = transfer(
             &token_program.key,
             &hp_usdt_account.key,
@@ -199,7 +216,6 @@ impl Processor {
             &[&pda_account.key],
             usdt_amount.clone(),
         )?;
-        msg!("Calling the token program to transfer tokens...");
         invoke_signed(
             &transfer_instruction,
             &[
@@ -210,10 +226,6 @@ impl Processor {
             ],
             &[&[b"divvyexchange", &[bump_seed]]],
         )?;
-
-        msg!("Subtracting withdrawal from liquidity");
-        hp_state.available_liquidity = hp_state.available_liquidity - usdt_amount;
-        HpLiquidity::pack(hp_state, &mut hp_state_account.data.borrow_mut())?;
 
         Ok(())
     }
@@ -563,7 +575,9 @@ impl Processor {
             return Err(ExchangeError::MarketAlreadySettled.into());
         }
         //Getting results from Switchboard
+        msg!("Unpacking switchboard aggregator");
         let aggregator: AggregatorState = get_aggregator(result_account)?;
+        msg!("Unpacking switchboard result");
         let round_result: RoundResult = get_aggregator_result(&aggregator)?;
         let result_u8 = round_result.result.ok_or(ExchangeError::FeedNotInitialized)? as u8;
         msg!("Result feed is {}", result_u8);
