@@ -290,6 +290,11 @@ impl Processor {
             return Err(ExchangeError::InvalidFeedAccount.into());
         }
 
+        // Checking if risk is non zero
+        if risk == 0 {
+            return Err(ExchangeError::BetRiskZero.into());
+        }
+
         //Getting odds from the Switchboard
         let aggregator: AggregatorState = get_aggregator(feed_account)?;
         let round_result: RoundResult = get_aggregator_result(&aggregator)?;

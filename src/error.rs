@@ -42,6 +42,8 @@ pub enum ExchangeError {
     /// Not enough liquidity
     #[error("Not enough liquidity")]
     NotEnoughLiquidity,
+    #[error("Bet risk is zero")]
+    BetRiskZero,
 
     // Initialized errors
     #[error("HP liquidity already initialized")]
@@ -53,6 +55,7 @@ pub enum ExchangeError {
     #[error("Feed not initialized")]
     FeedNotInitialized,
 
+    // Assertion errors
     #[error("Market side risk underflow.")]
     MarketSideRiskUnderflow,
     #[error("Market side payout underflow.")]
@@ -86,6 +89,7 @@ impl PrintProgramError for ExchangeError {
             ExchangeError::NotValidResult => msg!("Not valid result"),
             ExchangeError::InvalidFeedAccount => msg!("Invalid feed account"),
             ExchangeError::NotEnoughLiquidity => msg!("Not enough liquidity"),
+            ExchangeError::BetRiskZero => msg!("Bet risk is zero"),
 
             // Initialized errors
             ExchangeError::HpLiquidityAlreadyInitialized => {
@@ -95,6 +99,7 @@ impl PrintProgramError for ExchangeError {
             ExchangeError::BetAlreadyInitialized => msg!("Bet already initialized"),
             ExchangeError::FeedNotInitialized => msg!("Feed not initialized"),
 
+            // Assertion errors
             ExchangeError::MarketSideRiskUnderflow => msg!("Market side risk underflow."),
             ExchangeError::MarketSidePayoutUnderflow => msg!("Market side payout underflow."),
             ExchangeError::MarketSideRiskRemaining => {
