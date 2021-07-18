@@ -22,6 +22,8 @@ spl-associated-token-account = {version = "1.0.1", features = ["no-entrypoint"]}
 switchboard-program = "0.1.29" # Switchboard dependency
 lexical = "5.2.2" # Switchboard dependency this is 4000x faster
 num_enum = "0.5.1"
+num-derive = "0.3"
+num-traits = "0.2"
 
 [dev-dependencies]
 solana-program-test = "=1.6.6"

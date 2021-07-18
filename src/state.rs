@@ -8,7 +8,6 @@ use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 
 use crate::error::ExchangeError::InvalidInstruction;
 
-
 impl MoneylineMarketOutcome {
     pub fn unpack(input: &u8) -> Result<Self, ProgramError> {
         Ok(match input {
@@ -170,7 +169,7 @@ impl Pack for Market {
             user_risk_dst,
             pending_bets_dst,
         ) = mut_array_refs![dst, 1, 32, 8, 8, 32, 8, 8, 32, 8, 8, 8, 32, 1, 8, 8];
-        
+
         let Market {
             is_initialized,
             market_sides,
@@ -180,7 +179,7 @@ impl Pack for Market {
             bettor_balance: user_risk,
             pending_bets,
         } = self;
-        
+
         is_initialized_dst[0] = *is_initialized as u8;
         option_0_pubkey_dst.copy_from_slice(market_sides[0].feed_account.as_ref());
         *option_0_loss_dst = market_sides[0].payout.to_le_bytes();
@@ -203,12 +202,8 @@ impl Pack for HpLiquidity {
     const LEN: usize = 25;
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let src = array_ref![src, 0, HpLiquidity::LEN];
-        let (
-            is_initialized,
-            available_liquidity,
-            user_risk,
-            pending_bets,
-        ) = array_refs![src, 1, 8, 8, 8];
+        let (is_initialized, available_liquidity, user_risk, pending_bets) =
+            array_refs![src, 1, 8, 8, 8];
         let is_initialized = match is_initialized {
             [0] => false,
             [1] => true,
@@ -220,17 +215,12 @@ impl Pack for HpLiquidity {
             bettor_balance: u64::from_le_bytes(*user_risk),
             pending_bets: u64::from_le_bytes(*pending_bets),
         })
-
     }
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let dst = array_mut_ref![dst, 0, HpLiquidity::LEN];
-        let (
-            is_initialized_dst, 
-            available_liquidity_dst,
-            user_risk_dst,
-            pending_bets_dst,
-        ) = mut_array_refs![dst, 1, 8, 8, 8];
+        let (is_initialized_dst, available_liquidity_dst, user_risk_dst, pending_bets_dst) =
+            mut_array_refs![dst, 1, 8, 8, 8];
 
         let HpLiquidity {
             is_initialized,
