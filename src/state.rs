@@ -15,6 +15,7 @@ impl MoneylineMarketOutcome {
             1 => Self::MarketSide1Won,
             2 => Self::MarketSide2Won,
             3 => Self::NotYetSettled,
+            4 => Self::MarketCommenced,
             _ => return Err(InvalidInstruction.into()),
         })
     }
@@ -25,6 +26,7 @@ impl MoneylineMarketOutcome {
             MoneylineMarketOutcome::MarketSide1Won => 1,
             MoneylineMarketOutcome::MarketSide2Won => 2,
             MoneylineMarketOutcome::NotYetSettled => 3,
+            MoneylineMarketOutcome::MarketCommenced => 4,
         }
     }
 }
@@ -49,7 +51,7 @@ pub struct MarketSide {
 
 pub struct HpLiquidity {
     pub is_initialized: bool,
-    pub available_liquidity: u64,
+    pub locked_liquidity: u64,
     pub bettor_balance: u64,
     pub pending_bets: u64,
 }
@@ -71,6 +73,7 @@ pub enum MoneylineMarketOutcome {
     MarketSide1Won,
     MarketSide2Won,
     NotYetSettled,
+    MarketCommenced,
 }
 
 impl Sealed for Market {}
@@ -211,7 +214,7 @@ impl Pack for HpLiquidity {
         };
         Ok(HpLiquidity {
             is_initialized,
-            available_liquidity: u64::from_le_bytes(*available_liquidity),
+            locked_liquidity: u64::from_le_bytes(*available_liquidity),
             bettor_balance: u64::from_le_bytes(*user_risk),
             pending_bets: u64::from_le_bytes(*pending_bets),
         })
@@ -224,7 +227,7 @@ impl Pack for HpLiquidity {
 
         let HpLiquidity {
             is_initialized,
-            available_liquidity,
+            locked_liquidity: available_liquidity,
             bettor_balance: user_risk,
             pending_bets,
         } = self;

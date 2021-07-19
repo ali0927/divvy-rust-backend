@@ -24,32 +24,41 @@ pub enum ExchangeError {
     /// Amount Overflow
     #[error("Amount Overflow")]
     AmountOverflow,
-    /// Market already settled
-    #[error("Market already settled")]
-    MarketAlreadySettled,
-    /// Market not settled
-    #[error("Market not settled")]
-    MarketNotSettled,
-    /// Bet already settled
-    #[error("Bet already settled")]
-    BetAlreadySettled,
-    /// Not a valid result
-    #[error("Not valid result")]
-    NotValidResult,
     /// Invalid feed account
     #[error("Invalid feed account")]
     InvalidFeedAccount,
-    /// Not enough liquidity
-    #[error("Not enough liquidity")]
-    NotEnoughLiquidity,
+
+    // Deposit withdraw errors
+    #[error("Not enough available liquidity for withdrawal")]
+    NotEnoughAvailableLiquidityForWithdrawal,
+
+    // Already settled errors
+    #[error("Market already settled")]
+    MarketAlreadySettled,
+    #[error("Market not settled")]
+    MarketNotSettled,
+    #[error("Bet already settled")]
+    BetAlreadySettled,
+
+    // Betting init errors
+    #[error("Not enough available liquidity for bet")]
+    NotEnoughAvailableLiquidityForBet,
     #[error("Bet risk is zero")]
     BetRiskZero,
 
+    // Market settlement errors
+    #[error("Feed result not valid when settling market")]
+    NotValidMarketResult,
+
     // Initialized errors
+    #[error("HP liquidity not initialized")]
+    HpLiquidityNotInitialized,
     #[error("HP liquidity already initialized")]
     HpLiquidityAlreadyInitialized,
     #[error("Market not initialized")]
     MarketNotInitialized,
+    #[error("Market already initialized")]
+    MarketAlreadyInitialized,
     #[error("Bet already initialized")]
     BetAlreadyInitialized,
     #[error("Feed not initialized")]
@@ -68,8 +77,8 @@ pub enum ExchangeError {
     MarketBettorBalanceRemaining,
     #[error("All bets settled and house pool bettor balance is positive.")]
     HousePoolBettorBalanceRemaining,
-    #[error("The balance in the house pool does not equal available liquidity.")]
-    UnexpectedAvailableLiquidity,
+    #[error("All bets settled and the locked liquidity in the house pool is positive.")]
+    HousePoolLockedLiquidityRemaining,
 }
 
 impl PrintProgramError for ExchangeError {
@@ -83,19 +92,32 @@ impl PrintProgramError for ExchangeError {
             ExchangeError::ExpectedAmountMismatch => msg!("Expected Amount Mismatch"),
             ExchangeError::ExpectedDataMismatch => msg!("Expected Data Mismatch"),
             ExchangeError::AmountOverflow => msg!("Amount Overflow"),
+            ExchangeError::InvalidFeedAccount => msg!("Invalid feed account"),
+            
+            // Deposit withdraw errors
+            ExchangeError::NotEnoughAvailableLiquidityForWithdrawal => msg!("Not enough available liquidity for withdrawal"),
+
+            // Settled errors
             ExchangeError::MarketAlreadySettled => msg!("Market already settled"),
             ExchangeError::MarketNotSettled => msg!("Market not settled"),
             ExchangeError::BetAlreadySettled => msg!("Bet already settled"),
-            ExchangeError::NotValidResult => msg!("Not valid result"),
-            ExchangeError::InvalidFeedAccount => msg!("Invalid feed account"),
-            ExchangeError::NotEnoughLiquidity => msg!("Not enough liquidity"),
+            
+            // Betting init errors
+            ExchangeError::NotEnoughAvailableLiquidityForBet => msg!("Not enough available liquidity for bet"),
             ExchangeError::BetRiskZero => msg!("Bet risk is zero"),
 
+            // Market settlement errors
+            ExchangeError::NotValidMarketResult => msg!("Feed result not valid when settling market"),
+
             // Initialized errors
+            ExchangeError::HpLiquidityNotInitialized => {
+                msg!("HP liquidity not initialized");
+            }
             ExchangeError::HpLiquidityAlreadyInitialized => {
                 msg!("HP liquidity already initialized")
             }
             ExchangeError::MarketNotInitialized => msg!("Market not initialized"),
+            ExchangeError::MarketAlreadyInitialized => msg!("Market already initialized"),
             ExchangeError::BetAlreadyInitialized => msg!("Bet already initialized"),
             ExchangeError::FeedNotInitialized => msg!("Feed not initialized"),
 
@@ -114,7 +136,7 @@ impl PrintProgramError for ExchangeError {
             ExchangeError::HousePoolBettorBalanceRemaining => {
                 msg!("All bets settled and house pool bettor balance is positive.")
             }
-            ExchangeError::UnexpectedAvailableLiquidity => {
+            ExchangeError::HousePoolLockedLiquidityRemaining => {
                 msg!("The balance in the house pool does not equal available liquidity.")
             }
         }
