@@ -50,6 +50,10 @@ pub enum ExchangeError {
     #[error("Feed result not valid when settling market")]
     NotValidMarketResult,
 
+    // Market commence errors
+    #[error("Market has already commenced")]
+    MarketCommenced,
+
     // Initialized errors
     #[error("HP liquidity not initialized")]
     HpLiquidityNotInitialized,
@@ -79,6 +83,8 @@ pub enum ExchangeError {
     HousePoolBettorBalanceRemaining,
     #[error("All bets settled and the locked liquidity in the house pool is positive.")]
     HousePoolLockedLiquidityRemaining,
+    #[error("All bets settled and the live liquidity in the house pool is positive.")]
+    HousePoolLiveLiquidityRemaining,
 }
 
 impl PrintProgramError for ExchangeError {
@@ -109,6 +115,9 @@ impl PrintProgramError for ExchangeError {
             // Market settlement errors
             ExchangeError::NotValidMarketResult => msg!("Feed result not valid when settling market"),
 
+            // Market commence errors
+            ExchangeError::MarketCommenced => msg!("Market has already commenced"),
+
             // Initialized errors
             ExchangeError::HpLiquidityNotInitialized => {
                 msg!("HP liquidity not initialized");
@@ -138,6 +147,9 @@ impl PrintProgramError for ExchangeError {
             }
             ExchangeError::HousePoolLockedLiquidityRemaining => {
                 msg!("The balance in the house pool does not equal available liquidity.")
+            }
+            ExchangeError::HousePoolLiveLiquidityRemaining => {
+                msg!("All bets settled and the live liquidity in the house pool is positive.")
             }
         }
     }

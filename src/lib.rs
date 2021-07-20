@@ -15,6 +15,8 @@ fn calculate_available_liquidity(pool_usdt_state: &TokenAccount, pool_state: &Hp
     let available_liquidity = pool_usdt_state.amount
         .checked_sub(pool_state.locked_liquidity)
         .ok_or(ExchangeError::AmountOverflow)?
+        .checked_sub(pool_state.live_liquidity)
+        .ok_or(ExchangeError::AmountOverflow)?
         .checked_sub(pool_state.bettor_balance)
         .ok_or(ExchangeError::AmountOverflow)?;
     return Ok(available_liquidity)

@@ -14,8 +14,8 @@ impl MoneylineMarketOutcome {
             0 => Self::MarketSide0Won,
             1 => Self::MarketSide1Won,
             2 => Self::MarketSide2Won,
-            3 => Self::NotYetSettled,
-            4 => Self::MarketCommenced,
+            3 => Self::NotYetCommenced,
+            4 => Self::Commenced,
             _ => return Err(InvalidInstruction.into()),
         })
     }
@@ -25,8 +25,19 @@ impl MoneylineMarketOutcome {
             MoneylineMarketOutcome::MarketSide0Won => 0,
             MoneylineMarketOutcome::MarketSide1Won => 1,
             MoneylineMarketOutcome::MarketSide2Won => 2,
-            MoneylineMarketOutcome::NotYetSettled => 3,
-            MoneylineMarketOutcome::MarketCommenced => 4,
+            MoneylineMarketOutcome::NotYetCommenced => 3,
+            MoneylineMarketOutcome::Commenced => 4,
+        }
+    }
+}
+impl From<MoneylineMarketOutcome> for &str {
+    fn from(val: MoneylineMarketOutcome) -> Self {
+        match val {
+            MoneylineMarketOutcome::MarketSide0Won => "Market side 0 won",
+            MoneylineMarketOutcome::MarketSide1Won => "Market side 1 won",
+            MoneylineMarketOutcome::MarketSide2Won => "Market side 2 won",
+            MoneylineMarketOutcome::NotYetCommenced => "Not yet commenced",
+            MoneylineMarketOutcome::Commenced => "Commenced",
         }
     }
 }
@@ -52,6 +63,7 @@ pub struct MarketSide {
 pub struct HpLiquidity {
     pub is_initialized: bool,
     pub locked_liquidity: u64,
+    pub live_liquidity: u64,
     pub bettor_balance: u64,
     pub pending_bets: u64,
 }
@@ -72,8 +84,8 @@ pub enum MoneylineMarketOutcome {
     MarketSide0Won,
     MarketSide1Won,
     MarketSide2Won,
-    NotYetSettled,
-    MarketCommenced,
+    NotYetCommenced,
+    Commenced,
 }
 
 impl Sealed for Market {}
@@ -202,11 +214,16 @@ impl Pack for Market {
 }
 
 impl Pack for HpLiquidity {
-    const LEN: usize = 25;
+    const LEN: usize = 33;
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let src = array_ref![src, 0, HpLiquidity::LEN];
-        let (is_initialized, available_liquidity, user_risk, pending_bets) =
-            array_refs![src, 1, 8, 8, 8];
+        let (
+            is_initialized, 
+            locked_liquidity,
+            live_liquidity,
+            user_risk, 
+            pending_bets
+        ) = array_refs![src, 1, 8, 8, 8, 8];
         let is_initialized = match is_initialized {
             [0] => false,
             [1] => true,
@@ -214,7 +231,8 @@ impl Pack for HpLiquidity {
         };
         Ok(HpLiquidity {
             is_initialized,
-            locked_liquidity: u64::from_le_bytes(*available_liquidity),
+            locked_liquidity: u64::from_le_bytes(*locked_liquidity),
+            live_liquidity: u64::from_le_bytes(*live_liquidity),
             bettor_balance: u64::from_le_bytes(*user_risk),
             pending_bets: u64::from_le_bytes(*pending_bets),
         })
@@ -222,18 +240,25 @@ impl Pack for HpLiquidity {
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let dst = array_mut_ref![dst, 0, HpLiquidity::LEN];
-        let (is_initialized_dst, available_liquidity_dst, user_risk_dst, pending_bets_dst) =
-            mut_array_refs![dst, 1, 8, 8, 8];
+        let (
+            is_initialized_dst, 
+            locked_liquidity_dst, 
+            live_liquidity_dst,
+            bettor_balance_dst, 
+            pending_bets_dst
+        ) = mut_array_refs![dst, 1, 8, 8, 8, 8];
 
         let HpLiquidity {
             is_initialized,
-            locked_liquidity: available_liquidity,
-            bettor_balance: user_risk,
+            locked_liquidity,
+            live_liquidity,
+            bettor_balance,
             pending_bets,
         } = self;
         is_initialized_dst[0] = *is_initialized as u8;
-        *available_liquidity_dst = available_liquidity.to_le_bytes();
-        *user_risk_dst = user_risk.to_le_bytes();
+        *locked_liquidity_dst = locked_liquidity.to_le_bytes();
+        *live_liquidity_dst = live_liquidity.to_le_bytes();
+        *bettor_balance_dst = bettor_balance.to_le_bytes();
         *pending_bets_dst = pending_bets.to_le_bytes();
     }
 }

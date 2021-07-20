@@ -23,7 +23,8 @@ const uint64 = (property = "uint64") => {
 };
 export const STATE_ACCOUNT_DATA_LAYOUT = struct([
     bool("isInitialized"),
-    uint64("availableLiquidity"),
+    uint64("lockedLiquidity"),
+    uint64("liveLiquidity"),
 	uint64("bettorBalance"),
 	uint64("pendingBets"),
 ]);

@@ -33,6 +33,7 @@ pub enum ExchangeInstruction {
     Ownership {
         bump_seed: u8,
     },
+    CommenceMarket,
 }
 
 impl ExchangeInstruction {
