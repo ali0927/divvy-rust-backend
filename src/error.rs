@@ -27,6 +27,12 @@ pub enum ExchangeError {
     /// Invalid feed account
     #[error("Invalid feed account")]
     InvalidFeedAccount,
+    #[error("Invalid house token mint account")]
+    InvalidHtMintAccount,
+    #[error("Invalid house pool USDT account")]
+    InvalidPoolUsdtAccount,
+    #[error("Invalid market account")]
+    InvalidMarketAccount,
 
     // Deposit withdraw errors
     #[error("Not enough available liquidity for withdrawal")]
@@ -101,7 +107,10 @@ impl PrintProgramError for ExchangeError {
             ExchangeError::ExpectedDataMismatch => msg!("Expected Data Mismatch"),
             ExchangeError::AmountOverflow => msg!("Amount Overflow"),
             ExchangeError::InvalidFeedAccount => msg!("Invalid feed account"),
-            
+            ExchangeError::InvalidHtMintAccount => msg!("Invalid house token mint account"),
+            ExchangeError::InvalidPoolUsdtAccount => msg!("Invalid house pool USDT account"),
+            ExchangeError::InvalidMarketAccount => msg!("Invalid market account"),
+
             // Deposit withdraw errors
             ExchangeError::NotEnoughAvailableLiquidityForWithdrawal => msg!("Not enough available liquidity for withdrawal"),
             ExchangeError::GamesAreLive => msg!("Can not use the house pool when there are bets placed on live games"),

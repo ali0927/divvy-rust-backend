@@ -66,6 +66,8 @@ pub struct HpLiquidity {
     pub live_liquidity: u64,
     pub bettor_balance: u64,
     pub pending_bets: u64,
+    pub ht_mint: Pubkey,
+    pub pool_usdt: Pubkey
 }
 
 pub struct Bet {
@@ -214,7 +216,7 @@ impl Pack for Market {
 }
 
 impl Pack for HpLiquidity {
-    const LEN: usize = 33;
+    const LEN: usize = 97;
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let src = array_ref![src, 0, HpLiquidity::LEN];
         let (
@@ -222,8 +224,10 @@ impl Pack for HpLiquidity {
             locked_liquidity,
             live_liquidity,
             user_risk, 
-            pending_bets
-        ) = array_refs![src, 1, 8, 8, 8, 8];
+            pending_bets,
+            ht_mint,
+            pool_usdt,
+        ) = array_refs![src, 1, 8, 8, 8, 8, 32, 32];
         let is_initialized = match is_initialized {
             [0] => false,
             [1] => true,
@@ -235,6 +239,8 @@ impl Pack for HpLiquidity {
             live_liquidity: u64::from_le_bytes(*live_liquidity),
             bettor_balance: u64::from_le_bytes(*user_risk),
             pending_bets: u64::from_le_bytes(*pending_bets),
+            ht_mint: Pubkey::new_from_array(*ht_mint),
+            pool_usdt: Pubkey::new_from_array(*pool_usdt),
         })
     }
 
@@ -245,8 +251,10 @@ impl Pack for HpLiquidity {
             locked_liquidity_dst, 
             live_liquidity_dst,
             bettor_balance_dst, 
-            pending_bets_dst
-        ) = mut_array_refs![dst, 1, 8, 8, 8, 8];
+            pending_bets_dst,
+            ht_mint_dst,
+            pool_usdt_dst,
+        ) = mut_array_refs![dst, 1, 8, 8, 8, 8, 32, 32];
 
         let HpLiquidity {
             is_initialized,
@@ -254,12 +262,16 @@ impl Pack for HpLiquidity {
             live_liquidity,
             bettor_balance,
             pending_bets,
+            ht_mint,
+            pool_usdt,
         } = self;
         is_initialized_dst[0] = *is_initialized as u8;
         *locked_liquidity_dst = locked_liquidity.to_le_bytes();
         *live_liquidity_dst = live_liquidity.to_le_bytes();
         *bettor_balance_dst = bettor_balance.to_le_bytes();
         *pending_bets_dst = pending_bets.to_le_bytes();
+        ht_mint_dst.copy_from_slice(ht_mint.as_ref());
+        pool_usdt_dst.copy_from_slice(pool_usdt.as_ref());
     }
 }
 
