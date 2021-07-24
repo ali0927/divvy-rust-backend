@@ -31,6 +31,8 @@ pub enum ExchangeError {
     // Deposit withdraw errors
     #[error("Not enough available liquidity for withdrawal")]
     NotEnoughAvailableLiquidityForWithdrawal,
+    #[error("Can not use the house pool when there are bets placed on live games")]
+    GamesAreLive,
 
     // Already settled errors
     #[error("Market already settled")]
@@ -102,6 +104,7 @@ impl PrintProgramError for ExchangeError {
             
             // Deposit withdraw errors
             ExchangeError::NotEnoughAvailableLiquidityForWithdrawal => msg!("Not enough available liquidity for withdrawal"),
+            ExchangeError::GamesAreLive => msg!("Can not use the house pool when there are bets placed on live games"),
 
             // Settled errors
             ExchangeError::MarketAlreadySettled => msg!("Market already settled"),

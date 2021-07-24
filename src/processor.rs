@@ -83,9 +83,12 @@ impl Processor {
         let pool_usdt_account = next_account_info(accounts_iter)?;
         let pool_state_account = next_account_info(accounts_iter)?;
 
+        msg!("- Unpacking pool state");
         let pool_state = HpLiquidity::unpack(&pool_state_account.data.borrow())?;
+        msg!("- Unpacking ht mint");
         let ht_mint_state = TokenMint::unpack(&ht_mint_account.data.borrow())?;
-        let pool_usdt_state = TokenAccount::unpack(&pool_state_account.data.borrow())?;
+        msg!("- Unpacking usdt pool");
+        let pool_usdt_state = TokenAccount::unpack(&pool_usdt_account.data.borrow())?;
         
         msg!("- USDT amount deposited");
         msg!(0, 0, 0, 0, usdt_amount);
@@ -95,6 +98,12 @@ impl Processor {
         msg!(0, 0, 0, 0, pool_usdt_state.amount);
         msg!("- House pool locked liquidity");
         msg!(0, 0, 0, 0, pool_state.locked_liquidity);
+        msg!("- House pool live liquidity");
+        msg!(0, 0, 0, 0, pool_state.locked_liquidity);
+
+        if pool_state.live_liquidity > 0 {
+            return Err(ExchangeError::GamesAreLive.into());
+        }
 
         let conversion_ratio = match pool_usdt_state.amount {
             0 => 1f64,
@@ -169,7 +178,7 @@ impl Processor {
 
         let pool_state = HpLiquidity::unpack(&pool_state_account.data.borrow())?;
         let ht_mint_state = TokenMint::unpack(&ht_mint_account.data.borrow())?;
-        let pool_usdt_state = TokenAccount::unpack(&pool_state_account.data.borrow())?;
+        let pool_usdt_state = TokenAccount::unpack(&pool_usdt_account.data.borrow())?;
 
         msg!("- HT amount burned");
         msg!(0, 0, 0, 0, ht_amount);
@@ -181,6 +190,12 @@ impl Processor {
         msg!(0, 0, 0, 0, pool_state.locked_liquidity);
         msg!("- House pool bettor balance");
         msg!(0, 0, 0, 0, pool_state.bettor_balance);
+        msg!("- House pool live liquidity");
+        msg!(0, 0, 0, 0, pool_state.locked_liquidity);
+
+        if pool_state.live_liquidity > 0 {
+            return Err(ExchangeError::GamesAreLive.into());
+        }
 
         let conversion_ratio = (pool_usdt_state.amount
             .checked_sub(pool_state.bettor_balance)
