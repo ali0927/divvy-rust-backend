@@ -1,7 +1,7 @@
 use solana_program::program_error::ProgramError;
 use std::convert::TryInto;
 
-use crate::error::ExchangeError::InvalidInstruction;
+use crate::error::ExchangeError::{self, InvalidInstruction};
 
 pub enum ExchangeInstruction {
     Deposit {
@@ -14,34 +14,30 @@ pub enum ExchangeInstruction {
         ht_amount: u64,
         bump_seed: u8,
     },
-
-    //Init Bet
     Initbet {
         risk: u64,
         odds: u64,
         market_side: u8,
     },
-    //Settle Bet
     SettleBet {
         bump_seed: u8,
     },
-    //Init Moneyline Market
     InitMoneylineMarket,
-    //Settle moneyline market
     SettleMoneylineMarket {
         bump_seed: u8,
     },
-    //This is initial setup for giving ownership of hp mint & usdt account to the contract
     Ownership {
         bump_seed: u8,
     },
     CommenceMarket,
+    Freeze {
+        freeze_pool: bool,
+        freeze_betting: bool,
+    }
 }
 
 impl ExchangeInstruction {
-    /// Unpacks a byte buffer into a [ExchangeInstruction](enum.ExchangeInstruction.html).
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
-        //let (bump, _rest1) = input.split_last().ok_or(InvalidInstruction)?;
         let (tag, rest) = input.split_first().ok_or(InvalidInstruction)?;
         Ok(match tag {
             0 => Self::Deposit {
@@ -67,6 +63,15 @@ impl ExchangeInstruction {
             10 => Self::Ownership {
                 bump_seed: Self::unpack_last(rest)?,
             },
+            11 => Self::CommenceMarket,
+            12 => {
+                let (freeze_pool, rest) = rest.split_first().ok_or(ExchangeError::InvalidInstruction)?;
+                let (freeze_betting, _rest) = rest.split_first().ok_or(ExchangeError::InvalidInstruction)?;
+                Self::Freeze {
+                    freeze_pool: *freeze_pool != 0,
+                    freeze_betting: *freeze_betting != 0,
+                }
+            }
             _ => return Err(InvalidInstruction.into()),
         })
     }

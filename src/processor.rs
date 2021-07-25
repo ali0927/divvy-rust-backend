@@ -82,6 +82,13 @@ impl Processor {
                 msg!("Divvy - Commence Market");
                 Self::process_commence_market(accounts, program_id)
             }
+            ExchangeInstruction::Freeze {
+                freeze_pool,
+                freeze_betting,
+            } => {
+                msg!("Divvy - Freeze");
+                Self::process_freeze(accounts, program_id, freeze_pool, freeze_betting)
+            }
         }
     }
 
@@ -133,6 +140,9 @@ impl Processor {
 
         if pool_state.live_liquidity > 0 {
             return Err(ExchangeError::GamesAreLive.into());
+        }
+        if pool_state.frozen_pool {
+            return Err(ExchangeError::PoolFrozen.into());
         }
 
         let conversion_ratio = match pool_usdt_state.amount {
@@ -240,6 +250,9 @@ impl Processor {
 
         if pool_state.live_liquidity > 0 {
             return Err(ExchangeError::GamesAreLive.into());
+        }
+        if pool_state.frozen_pool {
+            return Err(ExchangeError::PoolFrozen.into());
         }
 
         let conversion_ratio = (pool_usdt_state
@@ -349,6 +362,10 @@ impl Processor {
         }
         if *token_program.key != token_program_id::ID {
             return Err(ExchangeError::InvalidInstruction.into());
+        }
+        //Checking if betting is frozen
+        if pool_state.frozen_betting {
+            return Err(ExchangeError::BettingFrozen.into());
         }
         //Checking if market is not commenced or settled yet
         if market_state.result != MoneylineMarketOutcome::NotYetCommenced {
@@ -528,6 +545,10 @@ impl Processor {
             return Err(ExchangeError::ExpectedDataMismatch.into());
         }
 
+        //Checking if betting is frozen
+        if pool_state.frozen_betting {
+            return Err(ExchangeError::BettingFrozen.into());
+        }
         if market_state.result == MoneylineMarketOutcome::NotYetCommenced {
             return Err(ExchangeError::MarketNotSettled.into());
         }
@@ -667,6 +688,7 @@ impl Processor {
         let market_side_1_feed_account = next_account_info(accounts_iter)?;
         let market_side_2_feed_account = next_account_info(accounts_iter)?;
         let result_feed_account = next_account_info(accounts_iter)?;
+        let pool_state_account = next_account_info(accounts_iter)?;
 
         if !initializer.is_signer {
             return Err(ProgramError::MissingRequiredSignature);
@@ -676,7 +698,13 @@ impl Processor {
             return Err(ExchangeError::NotValidAuthority.into());
         }
 
+        let pool_state = HpLiquidity::unpack(&pool_state_account.data.borrow())?;
         let mut market_state = Market::unpack_unchecked(&market_state_account.data.borrow())?;
+
+        //Checking if betting is frozen
+        if pool_state.frozen_betting {
+            return Err(ExchangeError::BettingFrozen.into());
+        }
         if market_state.is_initialized {
             return Err(ExchangeError::MarketAlreadyInitialized.into());
         }
@@ -752,7 +780,10 @@ impl Processor {
         if *market_state_account.owner != *program_id {
             return Err(ExchangeError::InvalidMarketAccount.into());
         }
-
+        //Checking if betting is frozen
+        if pool_state.frozen_betting {
+            return Err(ExchangeError::BettingFrozen.into());
+        }
         //Verifying result account
         if result_account.key != &market_state.result_feed {
             return Err(ExchangeError::NotValidAuthority.into());
@@ -983,6 +1014,8 @@ impl Processor {
             pool_usdt: *pool_usdt_account.key,
             insurance_fund_usdt: *insurance_fund_usdt_account.key,
             divvy_foundation_proceeds_usdt: *divvy_foundation_proceeds_usdt.key,
+            frozen_pool: false,
+            frozen_betting: false,
         };
         HpLiquidity::pack(pool_state, &mut pool_state_account.data.borrow_mut())?;
         Ok(())
@@ -1006,6 +1039,10 @@ impl Processor {
         let mut market_state = Market::unpack(&market_state_account.data.borrow())?;
         let mut pool_state = HpLiquidity::unpack(&pool_state_account.data.borrow())?;
 
+        //Checking if betting is frozen
+        if pool_state.frozen_betting {
+            return Err(ExchangeError::BettingFrozen.into());
+        }
         if market_state.result != MoneylineMarketOutcome::NotYetCommenced {
             return Err(ExchangeError::MarketCommenced.into());
         }
@@ -1021,6 +1058,44 @@ impl Processor {
             .ok_or(ExchangeError::AmountOverflow)?;
 
         Market::pack(market_state, &mut market_state_account.data.borrow_mut())?;
+        HpLiquidity::pack(pool_state, &mut pool_state_account.data.borrow_mut())?;
+
+        Ok(())
+    }
+
+    pub fn process_freeze(
+        accounts: &[AccountInfo],
+        _program_id: &Pubkey,
+        freeze_pool: bool,
+        freeze_betting: bool,
+    ) -> ProgramResult {
+        let accounts_iter = &mut accounts.iter();
+        let initializer = next_account_info(accounts_iter)?;
+        let pool_state_account = next_account_info(accounts_iter)?;
+
+        if !initializer.is_signer {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+        if initializer.key != &authority::ID {
+            return Err(ExchangeError::NotValidAuthority.into());
+        }
+
+        let mut pool_state = HpLiquidity::unpack(&pool_state_account.data.borrow())?;
+
+        if freeze_pool && !pool_state.frozen_pool {
+            msg!("Freezing pool");
+        } else if !freeze_pool && pool_state.frozen_pool {
+            msg!("Unfreezing pool");
+        }
+        if freeze_betting && !pool_state.frozen_betting {
+            msg!("Freezing betting");
+        } else if !freeze_betting && pool_state.frozen_betting {
+            msg!("Unfreezing betting");
+        }
+
+        pool_state.frozen_pool = freeze_pool;
+        pool_state.frozen_betting = freeze_betting;
+
         HpLiquidity::pack(pool_state, &mut pool_state_account.data.borrow_mut())?;
 
         Ok(())

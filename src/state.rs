@@ -70,6 +70,8 @@ pub struct HpLiquidity {
     pub pool_usdt: Pubkey,
     pub insurance_fund_usdt: Pubkey,
     pub divvy_foundation_proceeds_usdt: Pubkey,
+    pub frozen_pool: bool,
+    pub frozen_betting: bool,
 }
 
 pub struct Bet {
@@ -218,7 +220,7 @@ impl Pack for Market {
 }
 
 impl Pack for HpLiquidity {
-    const LEN: usize = 161;
+    const LEN: usize = 163;
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let src = array_ref![src, 0, HpLiquidity::LEN];
         let (
@@ -231,14 +233,12 @@ impl Pack for HpLiquidity {
             pool_usdt,
             insurance_fund_usdt,
             divvy_foundation_proceeds_usdt,
-        ) = array_refs![src, 1, 8, 8, 8, 8, 32, 32, 32, 32];
-        let is_initialized = match is_initialized {
-            [0] => false,
-            [1] => true,
-            _ => return Err(ProgramError::InvalidAccountData),
-        };
+            frozen_pool,
+            frozen_betting,
+        ) = array_refs![src, 1, 8, 8, 8, 8, 32, 32, 32, 32, 1, 1];
+
         Ok(HpLiquidity {
-            is_initialized,
+            is_initialized: is_initialized[0] != 0,
             locked_liquidity: u64::from_le_bytes(*locked_liquidity),
             live_liquidity: u64::from_le_bytes(*live_liquidity),
             bettor_balance: u64::from_le_bytes(*bettor_balance),
@@ -247,6 +247,8 @@ impl Pack for HpLiquidity {
             pool_usdt: Pubkey::new_from_array(*pool_usdt),
             insurance_fund_usdt: Pubkey::new_from_array(*insurance_fund_usdt),
             divvy_foundation_proceeds_usdt: Pubkey::new_from_array(*divvy_foundation_proceeds_usdt),
+            frozen_pool: frozen_pool[0] != 0,
+            frozen_betting: frozen_betting[0] != 0,
         })
     }
 
@@ -262,7 +264,10 @@ impl Pack for HpLiquidity {
             pool_usdt_dst,
             insurance_fund_usdt_dst,
             divvy_foundation_proceeds_usdt_dst,
-        ) = mut_array_refs![dst, 1, 8, 8, 8, 8, 32, 32, 32, 32];
+            frozen_pool_dst,
+            frozen_betting_dst,
+            
+        ) = mut_array_refs![dst, 1, 8, 8, 8, 8, 32, 32, 32, 32, 1, 1];
 
         let HpLiquidity {
             is_initialized,
@@ -274,6 +279,8 @@ impl Pack for HpLiquidity {
             pool_usdt,
             insurance_fund_usdt,
             divvy_foundation_proceeds_usdt,
+            frozen_pool,
+            frozen_betting,
         } = self;
         is_initialized_dst[0] = *is_initialized as u8;
         *locked_liquidity_dst = locked_liquidity.to_le_bytes();
@@ -284,6 +291,8 @@ impl Pack for HpLiquidity {
         pool_usdt_dst.copy_from_slice(pool_usdt.as_ref());
         insurance_fund_usdt_dst.copy_from_slice(insurance_fund_usdt.as_ref());
         divvy_foundation_proceeds_usdt_dst.copy_from_slice(divvy_foundation_proceeds_usdt.as_ref());
+        frozen_pool_dst[0] = *frozen_pool as u8;
+        frozen_betting_dst[0] = *frozen_betting as u8;
     }
 }
 

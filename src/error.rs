@@ -43,6 +43,12 @@ pub enum ExchangeError {
     NotEnoughAvailableLiquidityForWithdrawal,
     #[error("Can not use the house pool when there are bets placed on live games")]
     GamesAreLive,
+    #[error("Pool is frozen")]
+    PoolFrozen,
+
+    // Betting errors
+    #[error("Betting is frozen")]
+    BettingFrozen,
 
     // Already settled errors
     #[error("Market already settled")]
@@ -128,6 +134,10 @@ impl PrintProgramError for ExchangeError {
             ExchangeError::GamesAreLive => {
                 msg!("Can not use the house pool when there are bets placed on live games")
             }
+            ExchangeError::PoolFrozen => msg!("Pool is frozen"),
+
+            // Betting errors
+            ExchangeError::BettingFrozen => msg!("Betting is frozen"),
 
             // Settled errors
             ExchangeError::MarketAlreadySettled => msg!("Market already settled"),
