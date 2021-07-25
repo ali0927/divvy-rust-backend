@@ -1,4 +1,14 @@
-use solana_program::{account_info::{next_account_info, AccountInfo}, entrypoint::ProgramResult, msg, program::{invoke, invoke_signed}, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey, rent::Rent, sysvar::Sysvar};
+use solana_program::{
+    account_info::{next_account_info, AccountInfo},
+    entrypoint::ProgramResult,
+    msg,
+    program::{invoke, invoke_signed},
+    program_error::ProgramError,
+    program_pack::Pack,
+    pubkey::Pubkey,
+    rent::Rent,
+    sysvar::Sysvar,
+};
 
 use spl_token::{
     instruction::{burn, mint_to, transfer},
@@ -9,7 +19,16 @@ use spl_token::{
 //Switchboard dependencies
 use switchboard_program::{get_aggregator, get_aggregator_result, AggregatorState, RoundResult};
 
-use crate::{calculate_available_liquidity, calculate_locked_liquidity, calculate_payout, error::ExchangeError, instruction::ExchangeInstruction, schema::{authority, token_program_id}, state::{Bet, HpLiquidity, Market, MoneylineMarketOutcome}};
+use crate::{
+    calculate_available_liquidity, calculate_locked_liquidity, calculate_payout,
+    error::ExchangeError,
+    instruction::ExchangeInstruction,
+    schema::{authority, token_program_id},
+    state::{Bet, HpLiquidity, Market, MarketSide, MoneylineMarketOutcome},
+};
+
+const INSURANCE_FUND_TAX: f64 = 0.01;
+const DIVVY_FOUNDATION_TAX: f64 = 0.05;
 
 pub struct Processor;
 impl Processor {
@@ -51,9 +70,9 @@ impl Processor {
                 msg!("Divvy - Init Moneyline Market");
                 Self::process_init_moneyline_market(accounts, program_id)
             }
-            ExchangeInstruction::SettleMoneylineMarket => {
+            ExchangeInstruction::SettleMoneylineMarket { bump_seed } => {
                 msg!("Divvy - Settle Moneyline Market");
-                Self::process_settle_moneyline_market(accounts, program_id)
+                Self::process_settle_moneyline_market(accounts, program_id, bump_seed)
             }
             ExchangeInstruction::Ownership { bump_seed } => {
                 msg!("Divvy - Ownership");
@@ -89,7 +108,7 @@ impl Processor {
         let ht_mint_state = TokenMint::unpack(&ht_mint_account.data.borrow())?;
         msg!("- Unpacking usdt pool");
         let pool_usdt_state = TokenAccount::unpack(&pool_usdt_account.data.borrow())?;
-        
+
         // Checking house token ownership
         if *ht_mint_account.key != pool_state.ht_mint {
             return Err(ExchangeError::InvalidHtMintAccount.into());
@@ -118,9 +137,13 @@ impl Processor {
 
         let conversion_ratio = match pool_usdt_state.amount {
             0 => 1f64,
-            _ => (ht_mint_state.supply
-                .checked_sub(pool_state.bettor_balance)
-                .ok_or(ExchangeError::AmountOverflow)?) as f64 / pool_usdt_state.amount as f64,
+            _ => {
+                (ht_mint_state
+                    .supply
+                    .checked_sub(pool_state.bettor_balance)
+                    .ok_or(ExchangeError::AmountOverflow)?) as f64
+                    / pool_usdt_state.amount as f64
+            }
         };
         let ht_amount = (usdt_amount as f64 * conversion_ratio) as u64;
 
@@ -219,9 +242,11 @@ impl Processor {
             return Err(ExchangeError::GamesAreLive.into());
         }
 
-        let conversion_ratio = (pool_usdt_state.amount
+        let conversion_ratio = (pool_usdt_state
+            .amount
             .checked_sub(pool_state.bettor_balance)
-            .ok_or(ExchangeError::AmountOverflow)?) as f64 / ht_mint_state.supply as f64;
+            .ok_or(ExchangeError::AmountOverflow)?) as f64
+            / ht_mint_state.supply as f64;
         let usdt_amount = (ht_amount as f64 * conversion_ratio) as u64;
         let available_liquidity = calculate_available_liquidity(&pool_usdt_state, &pool_state)?;
 
@@ -330,8 +355,7 @@ impl Processor {
             return Err(ExchangeError::MarketCommenced.into());
         }
         //Checking if feed account is right
-        if market_state.market_sides[market_side as usize].feed_account != *feed_account.key
-        {
+        if market_state.market_sides[market_side as usize].feed_account != *feed_account.key {
             return Err(ExchangeError::InvalidFeedAccount.into());
         }
 
@@ -348,11 +372,10 @@ impl Processor {
         let feed_odds: f64 = round_result
             .result
             .ok_or(ExchangeError::FeedNotInitialized)?;
-        if feed_odds >= 0f64 { 
+        if feed_odds >= 0f64 {
             msg!("- Odds from feed: Positive:");
             msg!(0, 0, 0, 0, feed_odds as u64);
-        }
-        else {
+        } else {
             msg!("- Odds from feed: Negative:");
             msg!(0, 0, 0, 0, -feed_odds as u64);
         }
@@ -402,13 +425,14 @@ impl Processor {
         let new_locked_liquidity = calculate_locked_liquidity(&market_state)?;
         let current_locked_liquidity = market_state.locked_liquidity;
         let current_pool_locked_liquidity = pool_state.locked_liquidity;
-        
+
         //Confirm there is enough available liquidity
         if new_locked_liquidity > current_locked_liquidity {
             if new_locked_liquidity
                 .checked_sub(current_locked_liquidity)
                 .ok_or(ExchangeError::AmountOverflow)?
-                > available_liquidty {
+                > available_liquidty
+            {
                 return Err(ExchangeError::NotEnoughAvailableLiquidityForBet.into());
             }
         }
@@ -450,14 +474,16 @@ impl Processor {
         )?;
 
         // Initialize bet state
-        bet_state.is_initialized = true;
-        bet_state.market = *market_state_account.key;
-        bet_state.user_usdt_account = *user_usdt_account.key;
-        bet_state.user_main_account = *initializer.key;
-        bet_state.user_risk = risk;
-        bet_state.user_payout = payout;
-        bet_state.user_market_side = market_side;
-        bet_state.outcome = 0; //Outcome 0 as market not settled.
+        bet_state = Bet {
+            is_initialized: true,
+            market: *market_state_account.key,
+            user_usdt_account: *user_usdt_account.key,
+            user_main_account: *initializer.key,
+            user_risk: risk,
+            user_payout: payout,
+            user_market_side: market_side,
+            outcome: 0, //Outcome 0 as market not settled.
+        };
 
         //Write the accounts
         Bet::pack(bet_state, &mut bet_account.data.borrow_mut())?;
@@ -654,22 +680,38 @@ impl Processor {
         if market_state.is_initialized {
             return Err(ExchangeError::MarketAlreadyInitialized.into());
         }
-        if !Rent::get()?.is_exempt(**market_state_account.lamports.borrow(), market_state_account.data_len()) {
+        if !Rent::get()?.is_exempt(
+            **market_state_account.lamports.borrow(),
+            market_state_account.data_len(),
+        ) {
             return Err(ProgramError::AccountNotRentExempt);
         }
-        market_state.is_initialized = true;
-        market_state.market_sides[0].feed_account = *market_side_0_feed_account.key;
-        market_state.market_sides[0].payout = 0;
-        market_state.market_sides[0].risk = 0;
-        market_state.market_sides[1].feed_account = *market_side_1_feed_account.key;
-        market_state.market_sides[1].payout = 0;
-        market_state.market_sides[1].risk = 0;
-        market_state.market_sides[2].feed_account = *market_side_2_feed_account.key;
-        market_state.market_sides[2].payout = 0;
-        market_state.market_sides[2].risk = 0;
-        market_state.locked_liquidity = 0;
-        market_state.result_feed = *result_feed_account.key;
-        market_state.result = MoneylineMarketOutcome::NotYetCommenced;
+
+        market_state = Market {
+            is_initialized: true,
+            market_sides: [
+                MarketSide {
+                    feed_account: *market_side_0_feed_account.key,
+                    payout: 0,
+                    risk: 0,
+                },
+                MarketSide {
+                    feed_account: *market_side_1_feed_account.key,
+                    payout: 0,
+                    risk: 0,
+                },
+                MarketSide {
+                    feed_account: *market_side_2_feed_account.key,
+                    payout: 0,
+                    risk: 0,
+                },
+            ],
+            locked_liquidity: 0,
+            result_feed: *result_feed_account.key,
+            result: MoneylineMarketOutcome::NotYetCommenced,
+            bettor_balance: 0,
+            pending_bets: 0,
+        };
         Market::pack(market_state, &mut market_state_account.data.borrow_mut())?;
 
         Ok(())
@@ -678,16 +720,35 @@ impl Processor {
     fn process_settle_moneyline_market(
         accounts: &[AccountInfo],
         program_id: &Pubkey,
+        bump_seed: u8,
     ) -> ProgramResult {
         let accounts_iter = &mut accounts.iter();
         let _initializer = next_account_info(accounts_iter)?;
         let market_state_account = next_account_info(accounts_iter)?;
         let pool_state_account = next_account_info(accounts_iter)?;
         let result_account = next_account_info(accounts_iter)?;
+        let pda_account = next_account_info(accounts_iter)?;
+        let pool_usdt_account = next_account_info(accounts_iter)?;
+        let insurance_fund_usdt_account = next_account_info(accounts_iter)?;
+        let divvy_foundation_proceeds_usdt = next_account_info(accounts_iter)?;
+        let token_program = next_account_info(accounts_iter)?;
 
         let mut market_state = Market::unpack(&market_state_account.data.borrow())?;
         let mut pool_state = HpLiquidity::unpack(&pool_state_account.data.borrow())?;
 
+        // Checking house token ownership
+        if *pool_usdt_account.key != pool_state.pool_usdt {
+            return Err(ExchangeError::InvalidPoolUsdtAccount.into());
+        }
+        if *insurance_fund_usdt_account.key != pool_state.insurance_fund_usdt {
+            return Err(ExchangeError::InvalidInsuranceFundUsdtAccount.into());
+        }
+        if *divvy_foundation_proceeds_usdt.key != pool_state.divvy_foundation_proceeds_usdt {
+            return Err(ExchangeError::InvalidDivvyFoundationUsdtAccount.into());
+        }
+        if *token_program.key != token_program_id::ID {
+            return Err(ExchangeError::InvalidInstruction.into());
+        }
         if *market_state_account.owner != *program_id {
             return Err(ExchangeError::InvalidMarketAccount.into());
         }
@@ -697,7 +758,9 @@ impl Processor {
             return Err(ExchangeError::NotValidAuthority.into());
         }
         //Checking if market is not settled yet
-        if market_state.result != MoneylineMarketOutcome::NotYetCommenced || market_state.result != MoneylineMarketOutcome::Commenced {
+        if market_state.result != MoneylineMarketOutcome::NotYetCommenced
+            || market_state.result != MoneylineMarketOutcome::Commenced
+        {
             return Err(ExchangeError::MarketAlreadySettled.into());
         }
         //Getting results from Switchboard
@@ -723,9 +786,66 @@ impl Processor {
         //When the market settles the bettor balance changes from the amount of risk the bettors
         //have entered into the market to the winning sides unsettled risk and payout.
         let current_bettor_balance = market_state.bettor_balance;
-        let new_bettor_balance = market_state.market_sides[new_market_result as usize].risk
+        let new_bettor_balance = market_state.market_sides[new_market_result as usize]
+            .risk
             .checked_add(market_state.market_sides[new_market_result as usize].payout)
             .ok_or(ExchangeError::AmountOverflow)?;
+
+        if new_bettor_balance < current_bettor_balance {
+            // The house has made money
+            let house_profit = current_bettor_balance
+                .checked_sub(new_bettor_balance)
+                .ok_or(ExchangeError::AmountOverflow)? as f64;
+            let insurance_fund_fee = (house_profit * INSURANCE_FUND_TAX) as u64;
+            let divvy_foundation_fee = (house_profit * DIVVY_FOUNDATION_TAX) as u64;
+
+            msg!("- House profit before fees");
+            msg!(0, 0, 0, 0, house_profit);
+            msg!("- Insurance fund fee");
+            msg!(0, 0, 0, 0, insurance_fund_fee);
+            msg!("- Divvy Foundation fee");
+            msg!(0, 0, 0, 0, divvy_foundation_fee);
+
+            msg!("Transfering USDT to the insurance fund");
+            let transfer_instruction = transfer(
+                &token_program.key,
+                &pool_usdt_account.key,
+                &insurance_fund_usdt_account.key,
+                &pda_account.key,
+                &[&pda_account.key],
+                insurance_fund_fee.clone(),
+            )?;
+            invoke_signed(
+                &transfer_instruction,
+                &[
+                    pool_usdt_account.clone(),
+                    insurance_fund_usdt_account.clone(),
+                    pda_account.clone(),
+                    token_program.clone(),
+                ],
+                &[&[b"divvyexchange", &[bump_seed]]],
+            )?;
+            msg!("Transfering USDT to the Divvy foundation");
+            let transfer_instruction = transfer(
+                &token_program.key,
+                &pool_usdt_account.key,
+                &divvy_foundation_proceeds_usdt.key,
+                &pda_account.key,
+                &[&pda_account.key],
+                divvy_foundation_fee.clone(),
+            )?;
+            invoke_signed(
+                &transfer_instruction,
+                &[
+                    pool_usdt_account.clone(),
+                    divvy_foundation_proceeds_usdt.clone(),
+                    pda_account.clone(),
+                    token_program.clone(),
+                ],
+                &[&[b"divvyexchange", &[bump_seed]]],
+            )?;
+        }
+
         market_state.bettor_balance = new_bettor_balance;
         pool_state.bettor_balance = pool_state
             .bettor_balance
@@ -739,24 +859,25 @@ impl Processor {
         let current_locked_liquidity = market_state.locked_liquidity;
         let current_pool_locked_liquidity = pool_state.locked_liquidity;
         let current_pool_live_liquidity = pool_state.live_liquidity;
-        market_state.locked_liquidity = 0u64;
+        market_state.locked_liquidity = new_locked_liquidity;
         match market_state.result {
             MoneylineMarketOutcome::NotYetCommenced => {
-                pool_state.locked_liquidity = pool_state.locked_liquidity
+                pool_state.locked_liquidity = pool_state
+                    .locked_liquidity
                     .checked_sub(current_locked_liquidity)
                     .ok_or(ExchangeError::AmountOverflow)?;
             }
             MoneylineMarketOutcome::Commenced => {
-                pool_state.live_liquidity = pool_state.live_liquidity
+                pool_state.live_liquidity = pool_state
+                    .live_liquidity
                     .checked_sub(current_locked_liquidity)
                     .ok_or(ExchangeError::AmountOverflow)?;
             }
-            _ => return Err(ExchangeError::InvalidInstruction.into())
+            _ => return Err(ExchangeError::InvalidInstruction.into()),
         }
 
-
         market_state.result = new_market_result;
-        
+
         msg!("- Market locked liquidity from");
         msg!(0, 0, 0, 0, current_locked_liquidity);
         msg!("- Market locked liquidity to");
@@ -769,13 +890,13 @@ impl Processor {
         msg!(0, 0, 0, 0, current_pool_live_liquidity);
         msg!("- Pool live liquidity to");
         msg!(0, 0, 0, 0, pool_state.live_liquidity);
-        
+
         Market::pack(market_state, &mut market_state_account.data.borrow_mut())?;
         HpLiquidity::pack(pool_state, &mut pool_state_account.data.borrow_mut())?;
 
         Ok(())
     }
-    
+
     pub fn process_ownership(
         accounts: &[AccountInfo],
         _bump_seed: u8,
@@ -784,25 +905,28 @@ impl Processor {
         msg!("Divvy program ownership");
         let accounts_iter = &mut accounts.iter();
         let initializer = next_account_info(accounts_iter)?;
-        //let mint = next_account_info(accounts_iter)?;
-        //let token_program = next_account_info(accounts_iter)?;
-        //let pda_account = next_account_info(accounts_iter)?;
-        //let hp_usdt_account = next_account_info(accounts_iter)?;
         let pool_state_account = next_account_info(accounts_iter)?;
         let ht_mint_account = next_account_info(accounts_iter)?;
         let pool_usdt_account = next_account_info(accounts_iter)?;
+        let insurance_fund_usdt_account = next_account_info(accounts_iter)?;
+        let divvy_foundation_proceeds_usdt = next_account_info(accounts_iter)?;
 
         let mut pool_state = HpLiquidity::unpack_unchecked(&pool_state_account.data.borrow())?;
         if pool_state.is_initialized {
             return Err(ExchangeError::HpLiquidityAlreadyInitialized.into());
         }
-        if !Rent::get()?.is_exempt(**pool_state_account.lamports.borrow(), pool_state_account.data_len()) {
+        if !Rent::get()?.is_exempt(
+            **pool_state_account.lamports.borrow(),
+            pool_state_account.data_len(),
+        ) {
             return Err(ProgramError::AccountNotRentExempt);
         }
-        // Unpack token accounts to verify their length 
+        // Unpack token accounts to verify their length
         TokenMint::unpack(&ht_mint_account.data.borrow())?;
         TokenAccount::unpack(&pool_usdt_account.data.borrow())?;
-        
+        TokenAccount::unpack(&insurance_fund_usdt_account.data.borrow())?;
+        TokenAccount::unpack(&divvy_foundation_proceeds_usdt.data.borrow())?;
+
         if initializer.key != &authority::ID {
             return Err(ExchangeError::NotValidAuthority.into());
         }
@@ -849,9 +973,17 @@ impl Processor {
         // )?;
 
         msg!("Initalizing HP State account");
-        pool_state.is_initialized = true;
-        pool_state.ht_mint = *ht_mint_account.key;
-        pool_state.pool_usdt = *pool_usdt_account.key;
+        pool_state = HpLiquidity {
+            is_initialized: true,
+            locked_liquidity: 0,
+            live_liquidity: 0,
+            bettor_balance: 0,
+            pending_bets: 0,
+            ht_mint: *ht_mint_account.key,
+            pool_usdt: *pool_usdt_account.key,
+            insurance_fund_usdt: *insurance_fund_usdt_account.key,
+            divvy_foundation_proceeds_usdt: *divvy_foundation_proceeds_usdt.key,
+        };
         HpLiquidity::pack(pool_state, &mut pool_state_account.data.borrow_mut())?;
         Ok(())
     }
@@ -870,19 +1002,21 @@ impl Processor {
         }
         let market_state_account = next_account_info(accounts_iter)?;
         let pool_state_account = next_account_info(accounts_iter)?;
-        
+
         let mut market_state = Market::unpack(&market_state_account.data.borrow())?;
         let mut pool_state = HpLiquidity::unpack(&pool_state_account.data.borrow())?;
-        
+
         if market_state.result != MoneylineMarketOutcome::NotYetCommenced {
             return Err(ExchangeError::MarketCommenced.into());
         }
 
         market_state.result = MoneylineMarketOutcome::Commenced;
-        pool_state.locked_liquidity = pool_state.locked_liquidity
+        pool_state.locked_liquidity = pool_state
+            .locked_liquidity
             .checked_sub(market_state.locked_liquidity)
             .ok_or(ExchangeError::AmountOverflow)?;
-        pool_state.live_liquidity = pool_state.live_liquidity
+        pool_state.live_liquidity = pool_state
+            .live_liquidity
             .checked_add(market_state.locked_liquidity)
             .ok_or(ExchangeError::AmountOverflow)?;
 

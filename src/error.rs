@@ -33,6 +33,10 @@ pub enum ExchangeError {
     InvalidPoolUsdtAccount,
     #[error("Invalid market account")]
     InvalidMarketAccount,
+    #[error("Invalid insurance fund USDT account")]
+    InvalidInsuranceFundUsdtAccount,
+    #[error("Invalid divvy foundation USDT account")]
+    InvalidDivvyFoundationUsdtAccount,
 
     // Deposit withdraw errors
     #[error("Not enough available liquidity for withdrawal")]
@@ -110,22 +114,36 @@ impl PrintProgramError for ExchangeError {
             ExchangeError::InvalidHtMintAccount => msg!("Invalid house token mint account"),
             ExchangeError::InvalidPoolUsdtAccount => msg!("Invalid house pool USDT account"),
             ExchangeError::InvalidMarketAccount => msg!("Invalid market account"),
+            ExchangeError::InvalidInsuranceFundUsdtAccount => {
+                msg!("Invalid insurance fund USDT account")
+            }
+            ExchangeError::InvalidDivvyFoundationUsdtAccount => {
+                msg!("Invalid divvy foundation USDT account")
+            }
 
             // Deposit withdraw errors
-            ExchangeError::NotEnoughAvailableLiquidityForWithdrawal => msg!("Not enough available liquidity for withdrawal"),
-            ExchangeError::GamesAreLive => msg!("Can not use the house pool when there are bets placed on live games"),
+            ExchangeError::NotEnoughAvailableLiquidityForWithdrawal => {
+                msg!("Not enough available liquidity for withdrawal")
+            }
+            ExchangeError::GamesAreLive => {
+                msg!("Can not use the house pool when there are bets placed on live games")
+            }
 
             // Settled errors
             ExchangeError::MarketAlreadySettled => msg!("Market already settled"),
             ExchangeError::MarketNotSettled => msg!("Market not settled"),
             ExchangeError::BetAlreadySettled => msg!("Bet already settled"),
-            
+
             // Betting init errors
-            ExchangeError::NotEnoughAvailableLiquidityForBet => msg!("Not enough available liquidity for bet"),
+            ExchangeError::NotEnoughAvailableLiquidityForBet => {
+                msg!("Not enough available liquidity for bet")
+            }
             ExchangeError::BetRiskZero => msg!("Bet risk is zero"),
 
             // Market settlement errors
-            ExchangeError::NotValidMarketResult => msg!("Feed result not valid when settling market"),
+            ExchangeError::NotValidMarketResult => {
+                msg!("Feed result not valid when settling market")
+            }
 
             // Market commence errors
             ExchangeError::MarketCommenced => msg!("Market has already commenced"),

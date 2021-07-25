@@ -67,7 +67,9 @@ pub struct HpLiquidity {
     pub bettor_balance: u64,
     pub pending_bets: u64,
     pub ht_mint: Pubkey,
-    pub pool_usdt: Pubkey
+    pub pool_usdt: Pubkey,
+    pub insurance_fund_usdt: Pubkey,
+    pub divvy_foundation_proceeds_usdt: Pubkey,
 }
 
 pub struct Bet {
@@ -180,7 +182,7 @@ impl Pack for Market {
             option_2_pubkey_dst,
             option_2_loss_dst,
             option_2_win_dst,
-            max_loss_dst,
+            locked_liquidity_dst,
             result_feed_dst,
             result_dst,
             user_risk_dst,
@@ -207,7 +209,7 @@ impl Pack for Market {
         option_2_pubkey_dst.copy_from_slice(market_sides[2].feed_account.as_ref());
         *option_2_loss_dst = market_sides[2].payout.to_le_bytes();
         *option_2_win_dst = market_sides[2].risk.to_le_bytes();
-        *max_loss_dst = locked_liquidity.to_le_bytes();
+        *locked_liquidity_dst = locked_liquidity.to_le_bytes();
         result_feed_dst.copy_from_slice(result_feed.as_ref());
         *result_dst = result.pack().to_le_bytes();
         *user_risk_dst = user_risk.to_le_bytes();
@@ -216,18 +218,20 @@ impl Pack for Market {
 }
 
 impl Pack for HpLiquidity {
-    const LEN: usize = 97;
+    const LEN: usize = 161;
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let src = array_ref![src, 0, HpLiquidity::LEN];
         let (
-            is_initialized, 
+            is_initialized,
             locked_liquidity,
             live_liquidity,
-            user_risk, 
+            bettor_balance,
             pending_bets,
             ht_mint,
             pool_usdt,
-        ) = array_refs![src, 1, 8, 8, 8, 8, 32, 32];
+            insurance_fund_usdt,
+            divvy_foundation_proceeds_usdt,
+        ) = array_refs![src, 1, 8, 8, 8, 8, 32, 32, 32, 32];
         let is_initialized = match is_initialized {
             [0] => false,
             [1] => true,
@@ -237,24 +241,28 @@ impl Pack for HpLiquidity {
             is_initialized,
             locked_liquidity: u64::from_le_bytes(*locked_liquidity),
             live_liquidity: u64::from_le_bytes(*live_liquidity),
-            bettor_balance: u64::from_le_bytes(*user_risk),
+            bettor_balance: u64::from_le_bytes(*bettor_balance),
             pending_bets: u64::from_le_bytes(*pending_bets),
             ht_mint: Pubkey::new_from_array(*ht_mint),
             pool_usdt: Pubkey::new_from_array(*pool_usdt),
+            insurance_fund_usdt: Pubkey::new_from_array(*insurance_fund_usdt),
+            divvy_foundation_proceeds_usdt: Pubkey::new_from_array(*divvy_foundation_proceeds_usdt),
         })
     }
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let dst = array_mut_ref![dst, 0, HpLiquidity::LEN];
         let (
-            is_initialized_dst, 
-            locked_liquidity_dst, 
+            is_initialized_dst,
+            locked_liquidity_dst,
             live_liquidity_dst,
-            bettor_balance_dst, 
+            bettor_balance_dst,
             pending_bets_dst,
             ht_mint_dst,
             pool_usdt_dst,
-        ) = mut_array_refs![dst, 1, 8, 8, 8, 8, 32, 32];
+            insurance_fund_usdt_dst,
+            divvy_foundation_proceeds_usdt_dst,
+        ) = mut_array_refs![dst, 1, 8, 8, 8, 8, 32, 32, 32, 32];
 
         let HpLiquidity {
             is_initialized,
@@ -264,6 +272,8 @@ impl Pack for HpLiquidity {
             pending_bets,
             ht_mint,
             pool_usdt,
+            insurance_fund_usdt,
+            divvy_foundation_proceeds_usdt,
         } = self;
         is_initialized_dst[0] = *is_initialized as u8;
         *locked_liquidity_dst = locked_liquidity.to_le_bytes();
@@ -272,6 +282,8 @@ impl Pack for HpLiquidity {
         *pending_bets_dst = pending_bets.to_le_bytes();
         ht_mint_dst.copy_from_slice(ht_mint.as_ref());
         pool_usdt_dst.copy_from_slice(pool_usdt.as_ref());
+        insurance_fund_usdt_dst.copy_from_slice(insurance_fund_usdt.as_ref());
+        divvy_foundation_proceeds_usdt_dst.copy_from_slice(divvy_foundation_proceeds_usdt.as_ref());
     }
 }
 

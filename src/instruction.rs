@@ -28,7 +28,9 @@ pub enum ExchangeInstruction {
     //Init Moneyline Market
     InitMoneylineMarket,
     //Settle moneyline market
-    SettleMoneylineMarket,
+    SettleMoneylineMarket {
+        bump_seed: u8,
+    },
     //This is initial setup for giving ownership of hp mint & usdt account to the contract
     Ownership {
         bump_seed: u8,
@@ -59,7 +61,9 @@ impl ExchangeInstruction {
                 bump_seed: Self::unpack_last(rest)?,
             },
             4 => Self::InitMoneylineMarket,
-            5 => Self::SettleMoneylineMarket,
+            5 => Self::SettleMoneylineMarket {
+                bump_seed: Self::unpack_last(rest)?,
+            },
             10 => Self::Ownership {
                 bump_seed: Self::unpack_last(rest)?,
             },
