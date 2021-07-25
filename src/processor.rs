@@ -27,8 +27,7 @@ use crate::{
     state::{Bet, HpLiquidity, Market, MarketSide, MoneylineMarketOutcome},
 };
 
-const INSURANCE_FUND_TAX: f64 = 0.01;
-const DIVVY_FOUNDATION_TAX: f64 = 0.05;
+use fixed::types::U64F64;
 
 pub struct Processor;
 impl Processor {
@@ -145,17 +144,20 @@ impl Processor {
             return Err(ExchangeError::PoolFrozen.into());
         }
 
-        let conversion_ratio = match pool_usdt_state.amount {
-            0 => 1f64,
-            _ => {
-                (ht_mint_state
-                    .supply
-                    .checked_sub(pool_state.bettor_balance)
-                    .ok_or(ExchangeError::AmountOverflow)?) as f64
-                    / pool_usdt_state.amount as f64
-            }
+        let ht_amount = match pool_usdt_state.amount {
+            0 => usdt_amount,
+            _ => (U64F64::from_num(ht_mint_state.supply)
+                .checked_div(U64F64::from_num(
+                    pool_usdt_state
+                        .amount
+                        .checked_sub(pool_state.bettor_balance)
+                        .ok_or(ExchangeError::AmountOverflow)?,
+                ))
+                .ok_or(ExchangeError::AmountOverflow)?
+                .checked_mul(U64F64::from_num(usdt_amount))
+                .ok_or(ExchangeError::AmountOverflow)?)
+            .to_num(),
         };
-        let ht_amount = (usdt_amount as f64 * conversion_ratio) as u64;
 
         msg!("- HT amount received");
         msg!(0, 0, 0, 0, ht_amount);
@@ -255,12 +257,17 @@ impl Processor {
             return Err(ExchangeError::PoolFrozen.into());
         }
 
-        let conversion_ratio = (pool_usdt_state
-            .amount
-            .checked_sub(pool_state.bettor_balance)
-            .ok_or(ExchangeError::AmountOverflow)?) as f64
-            / ht_mint_state.supply as f64;
-        let usdt_amount = (ht_amount as f64 * conversion_ratio) as u64;
+        let usdt_amount: u64 = (U64F64::from_num(
+            pool_usdt_state
+                .amount
+                .checked_sub(pool_state.bettor_balance)
+                .ok_or(ExchangeError::AmountOverflow)?,
+        )
+        .checked_div(U64F64::from_num(ht_mint_state.supply))
+        .ok_or(ExchangeError::AmountOverflow)?
+        .checked_mul(U64F64::from_num(ht_amount))
+        .ok_or(ExchangeError::AmountOverflow)?)
+        .to_num();
         let available_liquidity = calculate_available_liquidity(&pool_usdt_state, &pool_state)?;
 
         msg!("- House pool available liquidity");
@@ -386,7 +393,7 @@ impl Processor {
         //Getting odds from the Switchboard
         let aggregator: AggregatorState = get_aggregator(feed_account)?;
         let round_result: RoundResult = get_aggregator_result(&aggregator)?;
-        let feed_odds: f64 = round_result
+        let feed_odds = round_result
             .result
             .ok_or(ExchangeError::FeedNotInitialized)?;
         if feed_odds >= 0f64 {
@@ -400,7 +407,7 @@ impl Processor {
         //To Do comparison of provided odds & feed odds.
 
         //Calculate payout
-        let payout = calculate_payout(feed_odds, risk);
+        let payout = calculate_payout(feed_odds, risk).ok_or(ExchangeError::InvalidInstruction)?;
         msg!("- Bet payout");
         msg!(0, 0, 0, 0, payout);
 
@@ -826,9 +833,15 @@ impl Processor {
             // The house has made money
             let house_profit = current_bettor_balance
                 .checked_sub(new_bettor_balance)
-                .ok_or(ExchangeError::AmountOverflow)? as f64;
-            let insurance_fund_fee = (house_profit * INSURANCE_FUND_TAX) as u64;
-            let divvy_foundation_fee = (house_profit * DIVVY_FOUNDATION_TAX) as u64;
+                .ok_or(ExchangeError::AmountOverflow)?;
+            let house_profit_frac: U64F64 = U64F64::from_num(house_profit);
+
+            let insurance_fund_fee: u64 = (house_profit_frac * U64F64::from_num(0.01))
+                .checked_to_num()
+                .ok_or(ExchangeError::AmountOverflow)?;
+            let divvy_foundation_fee: u64 = (house_profit_frac * U64F64::from_num(0.05))
+                .checked_to_num()
+                .ok_or(ExchangeError::AmountOverflow)?;
 
             msg!("- House profit before fees");
             msg!(0, 0, 0, 0, house_profit);
