@@ -24,7 +24,7 @@ use crate::{
     error::ExchangeError,
     instruction::ExchangeInstruction,
     schema::{authority, token_program_id},
-    state::{Bet, HpLiquidity, Market, MarketSide, MoneylineMarketOutcome},
+    state::{Bet, BetType, HpLiquidity, Market, MarketSide, MoneylineMarketOutcome},
 };
 
 use fixed::types::U64F64;
@@ -65,9 +65,9 @@ impl Processor {
                 msg!("Divvy - Settle");
                 Self::process_settle_bet(accounts, bump_seed, program_id)
             }
-            ExchangeInstruction::InitMoneylineMarket => {
+            ExchangeInstruction::InitMoneylineMarket { bet_type } => {
                 msg!("Divvy - Init Moneyline Market");
-                Self::process_init_moneyline_market(accounts, program_id)
+                Self::process_init_moneyline_market(accounts, program_id, bet_type)
             }
             ExchangeInstruction::SettleMoneylineMarket { bump_seed } => {
                 msg!("Divvy - Settle Moneyline Market");
@@ -379,7 +379,11 @@ impl Processor {
             return Err(ExchangeError::MarketCommenced.into());
         }
         //Checking if feed account is right
-        if market_state.market_sides[market_side as usize].feed_account != *feed_account.key {
+        if market_state.market_sides[market_side as usize]
+            .odds_feed_account
+            .ok_or(ExchangeError::InvalidInstruction)?
+            != *feed_account.key
+        {
             return Err(ExchangeError::InvalidFeedAccount.into());
         }
 
@@ -687,15 +691,15 @@ impl Processor {
     fn process_init_moneyline_market(
         accounts: &[AccountInfo],
         _program_id: &Pubkey,
+        bet_type: BetType,
     ) -> ProgramResult {
         let accounts_iter = &mut accounts.iter();
         let initializer = next_account_info(accounts_iter)?;
         let market_state_account = next_account_info(accounts_iter)?;
-        let market_side_0_feed_account = next_account_info(accounts_iter)?;
-        let market_side_1_feed_account = next_account_info(accounts_iter)?;
-        let market_side_2_feed_account = next_account_info(accounts_iter)?;
         let result_feed_account = next_account_info(accounts_iter)?;
         let pool_state_account = next_account_info(accounts_iter)?;
+        let market_side_0_odds_feed_account = next_account_info(accounts_iter)?;
+        let market_side_1_odds_feed_account = next_account_info(accounts_iter)?;
 
         if !initializer.is_signer {
             return Err(ProgramError::MissingRequiredSignature);
@@ -722,30 +726,65 @@ impl Processor {
             return Err(ProgramError::AccountNotRentExempt);
         }
 
+        let market_sides: [MarketSide; 3] = match bet_type {
+            BetType::MoneyLine => {
+                let market_side_2_odds_feed_account = next_account_info(accounts_iter)?;
+                [
+                    MarketSide {
+                        odds_feed_account: Some(*market_side_0_odds_feed_account.key),
+                        points_feed_account: None,
+                        payout: 0,
+                        risk: 0,
+                    },
+                    MarketSide {
+                        odds_feed_account: Some(*market_side_1_odds_feed_account.key),
+                        points_feed_account: None,
+                        payout: 0,
+                        risk: 0,
+                    },
+                    MarketSide {
+                        odds_feed_account: Some(*market_side_2_odds_feed_account.key),
+                        points_feed_account: None,
+                        payout: 0,
+                        risk: 0,
+                    },
+                ]
+            }
+            BetType::Spread | BetType::Total => {
+                let market_side_0_points_feed_account = next_account_info(accounts_iter)?;
+                let market_side_1_points_feed_account = next_account_info(accounts_iter)?;
+                [
+                    MarketSide {
+                        odds_feed_account: Some(*market_side_0_odds_feed_account.key),
+                        points_feed_account: Some(*market_side_0_points_feed_account.key),
+                        payout: 0,
+                        risk: 0,
+                    },
+                    MarketSide {
+                        odds_feed_account: Some(*market_side_1_odds_feed_account.key),
+                        points_feed_account: Some(*market_side_1_points_feed_account.key),
+                        payout: 0,
+                        risk: 0,
+                    },
+                    MarketSide {
+                        odds_feed_account: None,
+                        points_feed_account: None,
+                        payout: 0,
+                        risk: 0,
+                    },
+                ]
+            }
+        };
+
         market_state = Market {
             is_initialized: true,
-            market_sides: [
-                MarketSide {
-                    feed_account: *market_side_0_feed_account.key,
-                    payout: 0,
-                    risk: 0,
-                },
-                MarketSide {
-                    feed_account: *market_side_1_feed_account.key,
-                    payout: 0,
-                    risk: 0,
-                },
-                MarketSide {
-                    feed_account: *market_side_2_feed_account.key,
-                    payout: 0,
-                    risk: 0,
-                },
-            ],
+            market_sides: market_sides,
             locked_liquidity: 0,
             result_feed: *result_feed_account.key,
             result: MoneylineMarketOutcome::NotYetCommenced,
             bettor_balance: 0,
             pending_bets: 0,
+            bet_type,
         };
         Market::pack(market_state, &mut market_state_account.data.borrow_mut())?;
 

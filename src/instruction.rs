@@ -1,7 +1,10 @@
 use solana_program::program_error::ProgramError;
 use std::convert::TryInto;
 
-use crate::error::ExchangeError::{self, InvalidInstruction};
+use crate::{
+    error::ExchangeError::{self, InvalidInstruction},
+    state::BetType,
+};
 
 pub enum ExchangeInstruction {
     Deposit {
@@ -22,7 +25,9 @@ pub enum ExchangeInstruction {
     SettleBet {
         bump_seed: u8,
     },
-    InitMoneylineMarket,
+    InitMoneylineMarket {
+        bet_type: BetType,
+    },
     SettleMoneylineMarket {
         bump_seed: u8,
     },
@@ -33,7 +38,7 @@ pub enum ExchangeInstruction {
     Freeze {
         freeze_pool: bool,
         freeze_betting: bool,
-    }
+    },
 }
 
 impl ExchangeInstruction {
@@ -56,7 +61,14 @@ impl ExchangeInstruction {
             3 => Self::SettleBet {
                 bump_seed: Self::unpack_last(rest)?,
             },
-            4 => Self::InitMoneylineMarket,
+            4 => {
+                let (bet_type, _rest) = rest
+                    .split_first()
+                    .ok_or(ExchangeError::InvalidInstruction)?;
+                Self::InitMoneylineMarket {
+                    bet_type: BetType::unpack(bet_type)?,
+                }
+            }
             5 => Self::SettleMoneylineMarket {
                 bump_seed: Self::unpack_last(rest)?,
             },
@@ -65,8 +77,12 @@ impl ExchangeInstruction {
             },
             11 => Self::CommenceMarket,
             12 => {
-                let (freeze_pool, rest) = rest.split_first().ok_or(ExchangeError::InvalidInstruction)?;
-                let (freeze_betting, _rest) = rest.split_first().ok_or(ExchangeError::InvalidInstruction)?;
+                let (freeze_pool, rest) = rest
+                    .split_first()
+                    .ok_or(ExchangeError::InvalidInstruction)?;
+                let (freeze_betting, _rest) = rest
+                    .split_first()
+                    .ok_or(ExchangeError::InvalidInstruction)?;
                 Self::Freeze {
                     freeze_pool: *freeze_pool != 0,
                     freeze_betting: *freeze_betting != 0,
@@ -76,11 +92,11 @@ impl ExchangeInstruction {
         })
     }
 
+    // Todo: delete these 4 methods and use split_first, like in spl-token/instruction.rs
     fn unpack_last(input: &[u8]) -> Result<u8, ProgramError> {
         let (last, _rest) = input.split_last().ok_or(InvalidInstruction)?;
         Ok(last.clone())
     }
-
     fn unpack_amount(input: &[u8]) -> Result<u64, ProgramError> {
         let amount = input
             .get(..8)
@@ -89,7 +105,6 @@ impl ExchangeInstruction {
             .ok_or(InvalidInstruction)?;
         Ok(amount)
     }
-
     fn unpack_odds(input: &[u8]) -> Result<u64, ProgramError> {
         let odds = input
             .get(8..16)
@@ -98,7 +113,6 @@ impl ExchangeInstruction {
             .ok_or(InvalidInstruction)?;
         Ok(odds)
     }
-
     fn unpack_market_side(input: &[u8]) -> Result<u8, ProgramError> {
         let market_side = input
             .get(16..17)
@@ -107,14 +121,4 @@ impl ExchangeInstruction {
             .ok_or(InvalidInstruction)?;
         Ok(market_side)
     }
-
-    // fn unpack_result(input: &[u8]) -> Result<bool, ProgramError> {
-    //     let (tag, _rest) = input.split_last().ok_or(InvalidInstruction)?;
-
-    //     if *tag == 1 {
-    //         Ok(true)
-    //     } else {
-    //         Ok(false)
-    //     }
-    // }
 }

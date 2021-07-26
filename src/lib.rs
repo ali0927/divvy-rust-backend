@@ -1,4 +1,5 @@
 use error::ExchangeError;
+use solana_program::{program_error::ProgramError, pubkey::Pubkey};
 use spl_token::state::Account as TokenAccount;
 use state::{HpLiquidity, Market};
 
@@ -89,4 +90,27 @@ fn calculate_locked_liquidity(market_state: &Market) -> Result<u64, ExchangeErro
         .ok_or(ExchangeError::InvalidInstruction)?;
 
     return Ok(locked_liquidity);
+}
+
+fn unpack_pubkey_option(input: &[u8]) -> Result<(Option<Pubkey>, &[u8]), ProgramError> {
+    match input.split_first() {
+        Option::Some((&0, rest)) => Ok((Option::None, rest)),
+        Option::Some((&1, rest)) if rest.len() >= 32 => {
+            let (key, rest) = rest.split_at(32);
+            let pubkey = Pubkey::new(key);
+            Ok((Option::Some(pubkey), rest))
+        }
+        _ => Err(ExchangeError::InvalidInstruction.into()),
+    }
+}
+
+fn pack_pubkey_option(value: &Option<Pubkey>, dst: &mut [u8; 33]) {
+    match *value {
+        Option::Some(ref key) => {
+            let (some, rest) = dst.split_at_mut(1);
+            some[0] = 1;
+            rest.copy_from_slice(key.as_ref());
+        }
+        Option::None => dst.copy_from_slice(&[0; 33]),
+    }
 }

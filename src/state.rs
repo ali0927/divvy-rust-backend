@@ -6,41 +6,7 @@ use solana_program::{
 
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 
-use crate::error::ExchangeError::InvalidInstruction;
-
-impl MoneylineMarketOutcome {
-    pub fn unpack(input: &u8) -> Result<Self, ProgramError> {
-        Ok(match input {
-            0 => Self::MarketSide0Won,
-            1 => Self::MarketSide1Won,
-            2 => Self::MarketSide2Won,
-            3 => Self::NotYetCommenced,
-            4 => Self::Commenced,
-            _ => return Err(InvalidInstruction.into()),
-        })
-    }
-
-    pub fn pack(&self) -> u8 {
-        match *self {
-            MoneylineMarketOutcome::MarketSide0Won => 0,
-            MoneylineMarketOutcome::MarketSide1Won => 1,
-            MoneylineMarketOutcome::MarketSide2Won => 2,
-            MoneylineMarketOutcome::NotYetCommenced => 3,
-            MoneylineMarketOutcome::Commenced => 4,
-        }
-    }
-}
-impl From<MoneylineMarketOutcome> for &str {
-    fn from(val: MoneylineMarketOutcome) -> Self {
-        match val {
-            MoneylineMarketOutcome::MarketSide0Won => "Market side 0 won",
-            MoneylineMarketOutcome::MarketSide1Won => "Market side 1 won",
-            MoneylineMarketOutcome::MarketSide2Won => "Market side 2 won",
-            MoneylineMarketOutcome::NotYetCommenced => "Not yet commenced",
-            MoneylineMarketOutcome::Commenced => "Commenced",
-        }
-    }
-}
+use crate::{error::ExchangeError::InvalidInstruction, pack_pubkey_option, unpack_pubkey_option};
 
 pub struct Market {
     pub is_initialized: bool,
@@ -52,12 +18,21 @@ pub struct Market {
     /// When the market settles, this equals to the winning sides unsettled risk and payout
     pub bettor_balance: u64,
     pub pending_bets: u64,
+    pub bet_type: BetType,
 }
 
 pub struct MarketSide {
-    pub feed_account: Pubkey,
+    pub odds_feed_account: Option<Pubkey>,
+    pub points_feed_account: Option<Pubkey>,
     pub payout: u64,
     pub risk: u64,
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum BetType {
+    MoneyLine,
+    Spread,
+    Total,
 }
 
 pub struct HpLiquidity {
@@ -94,6 +69,68 @@ pub enum MoneylineMarketOutcome {
     Commenced,
 }
 
+impl MoneylineMarketOutcome {
+    pub fn unpack(input: &u8) -> Result<Self, ProgramError> {
+        Ok(match input {
+            0 => Self::MarketSide0Won,
+            1 => Self::MarketSide1Won,
+            2 => Self::MarketSide2Won,
+            3 => Self::NotYetCommenced,
+            4 => Self::Commenced,
+            _ => return Err(InvalidInstruction.into()),
+        })
+    }
+
+    pub fn pack(&self) -> u8 {
+        match *self {
+            MoneylineMarketOutcome::MarketSide0Won => 0,
+            MoneylineMarketOutcome::MarketSide1Won => 1,
+            MoneylineMarketOutcome::MarketSide2Won => 2,
+            MoneylineMarketOutcome::NotYetCommenced => 3,
+            MoneylineMarketOutcome::Commenced => 4,
+        }
+    }
+}
+impl From<MoneylineMarketOutcome> for &str {
+    fn from(val: MoneylineMarketOutcome) -> Self {
+        match val {
+            MoneylineMarketOutcome::MarketSide0Won => "Market side 0 won",
+            MoneylineMarketOutcome::MarketSide1Won => "Market side 1 won",
+            MoneylineMarketOutcome::MarketSide2Won => "Market side 2 won",
+            MoneylineMarketOutcome::NotYetCommenced => "Not yet commenced",
+            MoneylineMarketOutcome::Commenced => "Commenced",
+        }
+    }
+}
+
+impl BetType {
+    pub fn unpack(input: &u8) -> Result<Self, ProgramError> {
+        Ok(match input {
+            0 => Self::MoneyLine,
+            1 => Self::Spread,
+            2 => Self::Total,
+            _ => return Err(InvalidInstruction.into()),
+        })
+    }
+
+    pub fn pack(&self) -> u8 {
+        match *self {
+            BetType::MoneyLine => 0,
+            BetType::Spread => 1,
+            BetType::Total => 2,
+        }
+    }
+}
+impl From<BetType> for &str {
+    fn from(val: BetType) -> Self {
+        match val {
+            BetType::MoneyLine => "Money Line 3 Way",
+            BetType::Spread => "Points Spread",
+            BetType::Total => "Total Score",
+        }
+    }
+}
+
 impl Sealed for Market {}
 
 impl Sealed for HpLiquidity {}
@@ -119,18 +156,21 @@ impl IsInitialized for Bet {
 }
 
 impl Pack for Market {
-    const LEN: usize = 202;
+    const LEN: usize = 305;
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let src = array_ref![src, 0, Market::LEN];
         let (
             is_initialized,
-            option_0_pubkey,
+            option_0_odds_pubkey,
+            option_0_points_pubkey,
             option_0_loss,
             option_0_win,
-            option_1_pubkey,
+            option_1_odds_pubkey,
+            option_1_points_pubkey,
             option_1_loss,
             option_1_win,
-            option_2_pubkey,
+            option_2_odds_pubkey,
+            option_2_points_pubkey,
             option_2_loss,
             option_2_win,
             locked_liquidity,
@@ -138,7 +178,8 @@ impl Pack for Market {
             result,
             user_risk,
             pending_bets,
-        ) = array_refs![src, 1, 32, 8, 8, 32, 8, 8, 32, 8, 8, 8, 32, 1, 8, 8];
+            bet_type,
+        ) = array_refs![src, 1, 33, 33, 8, 8, 33, 33, 8, 8, 33, 33, 8, 8, 8, 32, 1, 8, 8, 1];
         let is_initialized = match is_initialized {
             [0] => false,
             [1] => true,
@@ -148,17 +189,20 @@ impl Pack for Market {
             is_initialized,
             market_sides: [
                 MarketSide {
-                    feed_account: Pubkey::new_from_array(*option_0_pubkey),
+                    odds_feed_account: unpack_pubkey_option(option_0_odds_pubkey)?.0,
+                    points_feed_account: unpack_pubkey_option(option_0_points_pubkey)?.0,
                     payout: u64::from_le_bytes(*option_0_loss),
                     risk: u64::from_le_bytes(*option_0_win),
                 },
                 MarketSide {
-                    feed_account: Pubkey::new_from_array(*option_1_pubkey),
+                    odds_feed_account: unpack_pubkey_option(option_1_odds_pubkey)?.0,
+                    points_feed_account: unpack_pubkey_option(option_1_points_pubkey)?.0,
                     payout: u64::from_le_bytes(*option_1_loss),
                     risk: u64::from_le_bytes(*option_1_win),
                 },
                 MarketSide {
-                    feed_account: Pubkey::new_from_array(*option_2_pubkey),
+                    odds_feed_account: unpack_pubkey_option(option_2_odds_pubkey)?.0,
+                    points_feed_account: unpack_pubkey_option(option_2_points_pubkey)?.0,
                     payout: u64::from_le_bytes(*option_2_loss),
                     risk: u64::from_le_bytes(*option_2_win),
                 },
@@ -168,6 +212,7 @@ impl Pack for Market {
             result: MoneylineMarketOutcome::unpack(&(u8::from_le_bytes(*result))).unwrap(),
             bettor_balance: u64::from_le_bytes(*user_risk),
             pending_bets: u64::from_le_bytes(*pending_bets),
+            bet_type: BetType::unpack(&bet_type[0])?,
         })
     }
 
@@ -175,13 +220,16 @@ impl Pack for Market {
         let dst = array_mut_ref![dst, 0, Market::LEN];
         let (
             is_initialized_dst,
-            option_0_pubkey_dst,
+            option_0_odds_pubkey_dst,
+            option_0_points_pubkey_dst,
             option_0_loss_dst,
             option_0_win_dst,
-            option_1_pubkey_dst,
+            option_1_odds_pubkey_dst,
+            option_1_points_pubkey_dst,
             option_1_loss_dst,
             option_1_win_dst,
-            option_2_pubkey_dst,
+            option_2_odds_pubkey_dst,
+            option_2_points_pubkey_dst,
             option_2_loss_dst,
             option_2_win_dst,
             locked_liquidity_dst,
@@ -189,7 +237,8 @@ impl Pack for Market {
             result_dst,
             user_risk_dst,
             pending_bets_dst,
-        ) = mut_array_refs![dst, 1, 32, 8, 8, 32, 8, 8, 32, 8, 8, 8, 32, 1, 8, 8];
+            bet_type_dst,
+        ) = mut_array_refs![dst, 1, 33, 33, 8, 8, 33, 33, 8, 8, 33, 33, 8, 8, 8, 32, 1, 8, 8, 1];
 
         let Market {
             is_initialized,
@@ -199,16 +248,29 @@ impl Pack for Market {
             result,
             bettor_balance: user_risk,
             pending_bets,
+            bet_type,
         } = self;
 
         is_initialized_dst[0] = *is_initialized as u8;
-        option_0_pubkey_dst.copy_from_slice(market_sides[0].feed_account.as_ref());
+        pack_pubkey_option(&market_sides[0].odds_feed_account, option_0_odds_pubkey_dst);
+        pack_pubkey_option(
+            &market_sides[0].points_feed_account,
+            option_0_points_pubkey_dst,
+        );
         *option_0_loss_dst = market_sides[0].payout.to_le_bytes();
         *option_0_win_dst = market_sides[0].risk.to_le_bytes();
-        option_1_pubkey_dst.copy_from_slice(market_sides[1].feed_account.as_ref());
+        pack_pubkey_option(&market_sides[1].odds_feed_account, option_1_odds_pubkey_dst);
+        pack_pubkey_option(
+            &market_sides[1].points_feed_account,
+            option_1_points_pubkey_dst,
+        );
         *option_1_loss_dst = market_sides[1].payout.to_le_bytes();
         *option_1_win_dst = market_sides[1].risk.to_le_bytes();
-        option_2_pubkey_dst.copy_from_slice(market_sides[2].feed_account.as_ref());
+        pack_pubkey_option(&market_sides[2].odds_feed_account, option_2_odds_pubkey_dst);
+        pack_pubkey_option(
+            &market_sides[2].points_feed_account,
+            option_2_points_pubkey_dst,
+        );
         *option_2_loss_dst = market_sides[2].payout.to_le_bytes();
         *option_2_win_dst = market_sides[2].risk.to_le_bytes();
         *locked_liquidity_dst = locked_liquidity.to_le_bytes();
@@ -216,6 +278,7 @@ impl Pack for Market {
         *result_dst = result.pack().to_le_bytes();
         *user_risk_dst = user_risk.to_le_bytes();
         *pending_bets_dst = pending_bets.to_le_bytes();
+        bet_type_dst[0] = bet_type.pack();
     }
 }
 
@@ -266,7 +329,6 @@ impl Pack for HpLiquidity {
             divvy_foundation_proceeds_usdt_dst,
             frozen_pool_dst,
             frozen_betting_dst,
-            
         ) = mut_array_refs![dst, 1, 8, 8, 8, 8, 32, 32, 32, 32, 1, 1];
 
         let HpLiquidity {
