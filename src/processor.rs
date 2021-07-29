@@ -993,11 +993,13 @@ impl Processor {
         let pool_usdt_account = next_account_info(accounts_iter)?;
         let insurance_fund_usdt_account = next_account_info(accounts_iter)?;
         let divvy_foundation_proceeds_usdt = next_account_info(accounts_iter)?;
-
+        msg!("Unpack HP State account");
         let mut pool_state = HpLiquidity::unpack_unchecked(&pool_state_account.data.borrow())?;
+        msg!("Check HP State Init");
         if pool_state.is_initialized {
             return Err(ExchangeError::HpLiquidityAlreadyInitialized.into());
         }
+        msg!("Check Rent Exemption");
         if !Rent::get()?.is_exempt(
             **pool_state_account.lamports.borrow(),
             pool_state_account.data_len(),
@@ -1005,11 +1007,13 @@ impl Processor {
             return Err(ProgramError::AccountNotRentExempt);
         }
         // Unpack token accounts to verify their length
+        msg!("Check token account accounts length");
         TokenMint::unpack(&ht_mint_account.data.borrow())?;
         TokenAccount::unpack(&pool_usdt_account.data.borrow())?;
         TokenAccount::unpack(&insurance_fund_usdt_account.data.borrow())?;
         TokenAccount::unpack(&divvy_foundation_proceeds_usdt.data.borrow())?;
 
+        msg!("Check authority");
         if initializer.key != &authority::ID {
             return Err(ExchangeError::NotValidAuthority.into());
         }

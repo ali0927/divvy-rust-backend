@@ -1,6 +1,6 @@
 pub mod authority {
     use solana_program::declare_id;
-    declare_id!("BdLUDdDzvv26GmgzuScXmcwddMYojHffm5tgGJGceP5S");
+    declare_id!("A8N9RMZdavqrc6d8mRQnPN7gc5jAnGTjQn6Ynp62xpWL");
 }
 
 pub mod token_program_id {

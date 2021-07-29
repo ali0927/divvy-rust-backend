@@ -3,14 +3,12 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 const { struct, nu64, u8, blob } = require("buffer-layout");
 import fs from 'fs'
 import path from "path";
-const DIVVY_PROGRAM_ID = new PublicKey("96qPDQTvLTQsNE9aQ73Xh3dRFj9UmX3Hpp48vpWuuTKj")
-const payerAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.join(process.env.HOME!, ".config/solana/id.json"), 'utf-8'))), { skipValidation: true })
-//HPT Mint
-// const mint = "FS3qbd4PQ4cvGWSMX9VSaQT7LwgEZwZcgiQpiRy3jkvV"
-// const token_program = TOKEN_PROGRAM_ID
-// const pda_account = "9tjYfuyjzs2ehSZvXAKa5wPYe2SCYpy9Q3nE57jry98Q"
-// USDT account
-// const hp_usdt_account = "F3hvLnCdPvmwjgEZ5LpYAZRaGB7GLU5DvM9wARkUNbjL"
+import { createNewToken } from "./createToken";
+import { createTokenAccount } from "./createTokenAccount";
+const DIVVY_PROGRAM_ID = new PublicKey("6mevH4HoqvLVNUsnbn9dWg4iBt3EZMY6REcjasnQH1YE")
+const payerAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.join(process.env.HOME!, "/Desktop/divvy.json"), 'utf-8'))), { skipValidation: true })
+const insuranceAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.join(process.env.HOME!, "/Desktop/insurance.json"), 'utf-8'))), { skipValidation: true })
+const profitsAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.join(process.env.HOME!, "/Desktop/profits.json"), 'utf-8'))), { skipValidation: true })
 const bool = (property = "bool") => {
     return blob(1, property);
 };
@@ -25,8 +23,14 @@ export const STATE_ACCOUNT_DATA_LAYOUT = struct([
     bool("isInitialized"),
     uint64("lockedLiquidity"),
     uint64("liveLiquidity"),
-	uint64("bettorBalance"),
-	uint64("pendingBets"),
+    uint64("bettorBalance"),
+    uint64("pendingBets"),
+    blob(32, "htMint"),
+    blob(32, "poolUsdt"),
+    blob(32, "insuranceFundUsdt"),
+    blob(32, "divvyFoundationProceedsUsdt"),
+    bool("frozenPool"),
+    bool("frozenBetting")
 ]);
 
 const INIT_PROGRAM_LAYOUT = struct([
@@ -51,11 +55,11 @@ function toCluster(cluster: string): Cluster {
 }
 const main = async () => {
     const [pda, bumpSeed] = await PublicKey.findProgramAddress([Buffer.from("divvyexchange")], DIVVY_PROGRAM_ID);
-
+    console.log(pda.toString())
     let cluster = 'devnet';
     let url = clusterApiUrl(toCluster(cluster), true);
     let connection = new Connection(url, 'processed');
-
+    console.log("PDA", pda.toString())
 
     const hp_state_account = Keypair.generate();
     console.log("Divvy HP state account " + hp_state_account.publicKey.toString())
@@ -71,22 +75,34 @@ const main = async () => {
         newAccountPubkey: hp_state_account.publicKey,
         programId: DIVVY_PROGRAM_ID
     });
+    const ht = await createNewToken(payerAccount, pda.toString(), pda.toString(), 6, connection);
+    console.log("House token address:", ht);
+    const usdt = await createNewToken(payerAccount, payerAccount.publicKey.toString(), payerAccount.publicKey.toString(), 6, connection);
+    console.log("USDT token address:", usdt);
 
+    const insuranceUSDTAccount = await createTokenAccount(payerAccount, usdt, insuranceAccount.publicKey.toString(), connection)
+    const profitsUSDTAccount = await createTokenAccount(payerAccount, usdt, profitsAccount.publicKey.toString(), connection)
+    const ht_mint = new PublicKey(ht)
+    const pool_usdt_account = await createTokenAccount(payerAccount, usdt, pda.toString(), connection)
+    console.log("HP USDT ACCOUNT:", pool_usdt_account.toString());
     const dataBuffer = Buffer.alloc(INIT_PROGRAM_LAYOUT.span);
-
     INIT_PROGRAM_LAYOUT.encode(data, dataBuffer);
-
     const initProgramInstruction = new TransactionInstruction({
         keys: [
             { pubkey: payerAccount.publicKey, isSigner: true, isWritable: true },
             { pubkey: hp_state_account.publicKey, isSigner: false, isWritable: true },
+            { pubkey: ht_mint, isSigner: false, isWritable: true },
+            { pubkey: pool_usdt_account, isSigner: false, isWritable: true },
+            { pubkey: insuranceUSDTAccount, isSigner: false, isWritable: true },
+            { pubkey: profitsUSDTAccount, isSigner: false, isWritable: true },
+
         ],
         programId: DIVVY_PROGRAM_ID,
         data: dataBuffer,
     });
 
     console.log("Awaiting transaction confirmation...");
-    
+
     let signature = await sendAndConfirmTransaction(connection, new Transaction().add(create_hp_state).add(initProgramInstruction), [
         payerAccount, hp_state_account
     ]);
