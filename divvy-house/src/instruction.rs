@@ -1,5 +1,5 @@
 use solana_program::program_error::ProgramError;
-use std::{convert::TryInto, mem::size_of};
+use std::{convert::TryInto};
 
 use crate::{
     error::ExchangeError::{self, InvalidInstruction},

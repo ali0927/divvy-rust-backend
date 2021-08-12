@@ -18,6 +18,9 @@ pub enum ExchangeError {
     /// Expected Amount Mismatch
     #[error("Expected Amount Mismatch")]
     ExpectedAmountMismatch,
+    /// Payout Zero
+    #[error("Payout came out as Zero, please  debug")]
+    PayoutZero,
     /// Expected Data Mismatch
     #[error("Expected Data Mismatch")]
     ExpectedDataMismatch,
@@ -30,7 +33,9 @@ pub enum ExchangeError {
     #[error("Invalid house token mint account")]
     InvalidHtMintAccount,
     #[error("Invalid house pool USDT account")]
-    InvalidPoolUsdtAccount,
+    InvalidHousePoolUsdtAccount,
+    #[error("Invalid betting pool USDT account")]
+    InvalidBettingPoolUsdtAccount,
     #[error("Invalid market account")]
     InvalidMarketAccount,
     #[error("Invalid insurance fund USDT account")]
@@ -114,11 +119,13 @@ impl PrintProgramError for ExchangeError {
             ExchangeError::InvalidInstruction => msg!("Invalid Instruction"),
             ExchangeError::NotValidAuthority => msg!("Not Valid Authority"),
             ExchangeError::ExpectedAmountMismatch => msg!("Expected Amount Mismatch"),
+            ExchangeError::PayoutZero => msg!("Payout cameout as Zero"),
             ExchangeError::ExpectedDataMismatch => msg!("Expected Data Mismatch"),
             ExchangeError::AmountOverflow => msg!("Amount Overflow"),
             ExchangeError::InvalidFeedAccount => msg!("Invalid feed account"),
             ExchangeError::InvalidHtMintAccount => msg!("Invalid house token mint account"),
-            ExchangeError::InvalidPoolUsdtAccount => msg!("Invalid house pool USDT account"),
+            ExchangeError::InvalidBettingPoolUsdtAccount => msg!("Invalid betting pool USDT account"),
+            ExchangeError::InvalidHousePoolUsdtAccount => msg!("Invalid house pool USDT account"),
             ExchangeError::InvalidMarketAccount => msg!("Invalid market account"),
             ExchangeError::InvalidInsuranceFundUsdtAccount => {
                 msg!("Invalid insurance fund USDT account")

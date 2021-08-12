@@ -1,8 +1,4 @@
-use solana_program::{
-    program_error::ProgramError,
-    program_pack::{IsInitialized, Pack, Sealed},
-    pubkey::Pubkey,
-};
+use solana_program::{program_error::ProgramError, program_pack::{IsInitialized, Pack, Sealed}, pubkey::Pubkey};
 
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 
@@ -174,7 +170,7 @@ impl Pack for Market {
             locked_liquidity,
             result_feed,
             result,
-            user_risk,
+            bettor_balance,
             pending_bets,
             bet_type,
         ) = array_refs![src, 1, 33, 33, 8, 8, 33, 33, 8, 8, 33, 33, 8, 8, 8, 32, 1, 8, 8, 1];
@@ -208,7 +204,7 @@ impl Pack for Market {
             locked_liquidity: u64::from_le_bytes(*locked_liquidity),
             result_feed: Pubkey::new_from_array(*result_feed),
             result: MoneylineMarketOutcome::unpack(&(u8::from_le_bytes(*result))).unwrap(),
-            bettor_balance: u64::from_le_bytes(*user_risk),
+            bettor_balance: u64::from_le_bytes(*bettor_balance),
             pending_bets: u64::from_le_bytes(*pending_bets),
             bet_type: BetType::unpack(&bet_type[0])?,
         })
@@ -233,7 +229,7 @@ impl Pack for Market {
             locked_liquidity_dst,
             result_feed_dst,
             result_dst,
-            user_risk_dst,
+            bettor_balance_dst,
             pending_bets_dst,
             bet_type_dst,
         ) = mut_array_refs![dst, 1, 33, 33, 8, 8, 33, 33, 8, 8, 33, 33, 8, 8, 8, 32, 1, 8, 8, 1];
@@ -244,7 +240,7 @@ impl Pack for Market {
             locked_liquidity,
             result_feed,
             result,
-            bettor_balance: user_risk,
+            bettor_balance,
             pending_bets,
             bet_type,
         } = self;
@@ -274,7 +270,7 @@ impl Pack for Market {
         *locked_liquidity_dst = locked_liquidity.to_le_bytes();
         result_feed_dst.copy_from_slice(result_feed.as_ref());
         *result_dst = result.pack().to_le_bytes();
-        *user_risk_dst = user_risk.to_le_bytes();
+        *bettor_balance_dst = bettor_balance.to_le_bytes();
         *pending_bets_dst = pending_bets.to_le_bytes();
         bet_type_dst[0] = bet_type.pack();
     }

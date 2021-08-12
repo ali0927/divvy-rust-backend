@@ -62,7 +62,7 @@ impl Processor {
             }
 
             HouseInstruction::TransferLockedLiquidity { usdt_amount, bump_seed } => {
-                msg!("Divvy - Ownership");
+                msg!("Divvy - Transfer locked liquidity");
                 Self::transfer_usdt_on_market_commence(accounts,usdt_amount, bump_seed, program_id)
             }
 
@@ -110,14 +110,18 @@ impl Processor {
         msg!(0, 0, 0, 0, ht_mint_state.supply);
         msg!("- House pool balance");
         msg!(0, 0, 0, 0, pool_usdt_state.amount);
-        msg!("- House pool locked liquidity");
-        msg!(0, 0, 0, 0, pool_state.locked_liquidity);
-        msg!("- House pool live liquidity");
-        msg!(0, 0, 0, 0, pool_state.locked_liquidity);
 
-        if pool_state.live_liquidity > 0 {
-            return Err(ExchangeError::GamesAreLive.into());
-        }
+        // TODO fix this
+        // msg!("- House pool locked liquidity");
+        // msg!(0, 0, 0, 0, pool_state.locked_liquidity);
+        // msg!("- House pool live liquidity");
+        // msg!(0, 0, 0, 0, pool_state.locked_liquidity);
+
+        // TODO fix this
+        // if pool_state.live_liquidity > 0 {
+        //     return Err(ExchangeError::GamesAreLive.into());
+        // }
+
         if pool_state.frozen_pool {
             return Err(ExchangeError::PoolFrozen.into());
         }
@@ -219,14 +223,15 @@ impl Processor {
         msg!(0, 0, 0, 0, ht_mint_state.supply);
         msg!("- House pool balance");
         msg!(0, 0, 0, 0, pool_usdt_state.amount);
-        msg!("- House pool locked liquidity");
-        msg!(0, 0, 0, 0, pool_state.locked_liquidity);
-        msg!("- House pool live liquidity");
-        msg!(0, 0, 0, 0, pool_state.locked_liquidity);
+        //TODO fix this
+        // msg!("- House pool locked liquidity");
+        // msg!(0, 0, 0, 0, pool_state.locked_liquidity);
+        // msg!("- House pool live liquidity");
+        // msg!(0, 0, 0, 0, pool_state.locked_liquidity);
 
-        if pool_state.live_liquidity > 0 {
-            return Err(ExchangeError::GamesAreLive.into());
-        }
+        // if pool_state.live_liquidity > 0 {
+        //     return Err(ExchangeError::GamesAreLive.into());
+        // }
         if pool_state.frozen_pool {
             return Err(ExchangeError::PoolFrozen.into());
         }
@@ -312,11 +317,11 @@ impl Processor {
         if !bet_pda_account.is_signer {
             return Err(ProgramError::MissingRequiredSignature);
         }
-        let pool_state = HpLiquidity::unpack(&pool_state_account.data.borrow())?;
-        let pool_usdt_state = TokenAccount::unpack(&pool_usdt_account.data.borrow())?;
+        // let pool_usdt_state = TokenAccount::unpack(&pool_usdt_account.data.borrow())?;
+        // let pool_state = HpLiquidity::unpack(&pool_state_account.data.borrow())?;
 
-        //TO DO check if locked liquidity is greater than the usdt balance 
-        //TO DO check if betting_usdt_account is actually the betting_account in state
+        //TODO check if locked liquidity is greater than the usdt balance 
+        //TODO check if betting_usdt_account is actually the betting_account in state
 
         msg!("transferring locked liquidity usdt on market commence");
         let transfer_instruction = transfer(
@@ -354,14 +359,13 @@ impl Processor {
         let ht_mint_account = next_account_info(accounts_iter)?;
         let betting_usdt_account = next_account_info(accounts_iter)?;
         let pool_usdt_account = next_account_info(accounts_iter)?;
-        let insurance_fund_usdt_account = next_account_info(accounts_iter)?;
-        let divvy_foundation_proceeds_usdt = next_account_info(accounts_iter)?;
         msg!("Unpack HP State account");
         let mut pool_state = HpLiquidity::unpack_unchecked(&pool_state_account.data.borrow())?;
         msg!("Check HP State Init");
-        if pool_state.is_initialized {
-            return Err(ExchangeError::HpLiquidityAlreadyInitialized.into());
-        }
+        // Doesn't help, should change
+        // if pool_state.is_initialized {
+        //     return Err(ExchangeError::HpLiquidityAlreadyInitialized.into());
+        // }
         msg!("Check Rent Exemption");
         if !Rent::get()?.is_exempt(
             **pool_state_account.lamports.borrow(),
@@ -374,8 +378,6 @@ impl Processor {
         TokenMint::unpack(&ht_mint_account.data.borrow())?;
         TokenAccount::unpack(&betting_usdt_account.data.borrow())?;
         TokenAccount::unpack(&pool_usdt_account.data.borrow())?;
-        TokenAccount::unpack(&insurance_fund_usdt_account.data.borrow())?;
-        TokenAccount::unpack(&divvy_foundation_proceeds_usdt.data.borrow())?;
 
         msg!("Check authority");
         if initializer.key != &authority::ID {
@@ -385,13 +387,9 @@ impl Processor {
         msg!("Initalizing HP State account");
         pool_state = HpLiquidity {
             is_initialized: true,
-            locked_liquidity: 0,
-            live_liquidity: 0,
             ht_mint: *ht_mint_account.key,
             betting_usdt: *betting_usdt_account.key,
             pool_usdt: *pool_usdt_account.key,
-            insurance_fund_usdt: *insurance_fund_usdt_account.key,
-            divvy_foundation_proceeds_usdt: *divvy_foundation_proceeds_usdt.key,
             frozen_pool: false,
         };
         HpLiquidity::pack(pool_state, &mut pool_state_account.data.borrow_mut())?;

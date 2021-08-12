@@ -1,5 +1,5 @@
 use error::ExchangeError;
-use solana_program::{program_error::ProgramError, pubkey::Pubkey};
+use solana_program::{msg, program_error::ProgramError, pubkey::Pubkey};
 use spl_token::state::Account as TokenAccount;
 use state::{BettingPoolState, Market};
 
@@ -26,10 +26,10 @@ fn calculate_available_liquidity(
 }
 
 fn calculate_payout(odds: f64, risk: u64) -> Option<u64> {
-    if odds > 0.0 {
-        Some(odds as u64 * risk / 100)
+    if odds >= 0.0 {
+        Some((risk as f64 * (odds / 100f64)) as u64)
     } else if odds < 0.0 {
-        Some(100 / ((-odds as u64) * risk))
+        Some((risk as f64 * (100f64 / -odds)) as u64)
     } else {
         None
     }

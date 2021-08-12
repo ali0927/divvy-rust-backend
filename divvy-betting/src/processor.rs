@@ -102,12 +102,12 @@ impl Processor {
 
         // Checking house pool usdt account
         if *hp_usdt_account.key != pool_state.house_pool_usdt {
-            return Err(ExchangeError::InvalidPoolUsdtAccount.into());
+            return Err(ExchangeError::InvalidHousePoolUsdtAccount.into());
         }
 
         // Checking bet pool usdt account
         if *bet_usdt_account.key != pool_state.betting_pool_usdt {
-            return Err(ExchangeError::InvalidPoolUsdtAccount.into());
+            return Err(ExchangeError::InvalidBettingPoolUsdtAccount.into());
         }
 
         if *market_state_account.owner != *program_id {
@@ -154,13 +154,17 @@ impl Processor {
             msg!(0, 0, 0, 0, -feed_odds as u64);
         }
 
-        //To Do comparison of provided odds & feed odds.
+        //TODO comparison of provided odds & feed odds.
 
         //Calculate payout
         let payout = calculate_payout(feed_odds, risk).ok_or(ExchangeError::InvalidInstruction)?;
         msg!("- Bet payout");
         msg!(0, 0, 0, 0, payout);
 
+        // Payout coming out as zero, throw error
+        if payout == 0u64  {
+            return Err(ExchangeError::PayoutZero.into());
+        }
         // Increment pending bets
         msg!("Incrementing market pending bets.");
         market_state.pending_bets = market_state
@@ -248,7 +252,10 @@ impl Processor {
             outcome: 0, //Outcome 0 as market not settled.
         };
 
-        //Write the accounts
+        // Increment bettor balance
+        market_state.bettor_balance  = market_state.bettor_balance + risk;
+
+        // Write the accounts
         Bet::pack(bet_state, &mut bet_account.data.borrow_mut())?;
         BettingPoolState::pack(pool_state, &mut bet_pool_state_account.data.borrow_mut())?;
         Market::pack(market_state, &mut market_state_account.data.borrow_mut())?;
@@ -267,7 +274,6 @@ impl Processor {
         let market_state_account = next_account_info(accounts_iter)?;
         let bet_state_account = next_account_info(accounts_iter)?;
         let pda_account = next_account_info(accounts_iter)?;
-        let hp_usdt_account = next_account_info(accounts_iter)?;
         let bet_usdt_account = next_account_info(accounts_iter)?;
         let user_usdt_account = next_account_info(accounts_iter)?;
         let user_main_account = next_account_info(accounts_iter)?;
@@ -277,14 +283,9 @@ impl Processor {
         let mut market_state = Market::unpack(&market_state_account.data.borrow())?;
         let mut bet_state = Bet::unpack(&bet_state_account.data.borrow())?;
 
-        // Checking house pool usdt account
-        if *hp_usdt_account.key != pool_state.house_pool_usdt {
-            return Err(ExchangeError::InvalidPoolUsdtAccount.into());
-        }
-
         // Checking bet pool usdt account
         if *bet_usdt_account.key != pool_state.betting_pool_usdt {
-            return Err(ExchangeError::InvalidPoolUsdtAccount.into());
+            return Err(ExchangeError::InvalidBettingPoolUsdtAccount.into());
         }
 
         if *market_state_account.owner != *program_id {
@@ -381,7 +382,7 @@ impl Processor {
                     token_program.clone(),
                 ],
                 //To Do Please test bump seed thing
-                &[&[b"divvybetting", &[bump_seed]]],
+                &[&[b"divvybetting", &[255]]],
             )?;
         }
 
@@ -393,28 +394,28 @@ impl Processor {
         //Assert that when all of the markets winning bets are settled there is
         //no remaining risk, payout and bettor balance in the winning market side.
         if market_state.pending_bets == 0 {
-            msg!("Market pending bets are settled. Asserting.");
-            if market_state.market_sides[market_state.result as usize].risk != 0 {
-                return Err(ExchangeError::MarketSideRiskRemaining.into());
-            }
-            if market_state.market_sides[market_state.result as usize].payout != 0 {
-                return Err(ExchangeError::MarketSidePayoutRemaining.into());
-            }
-            if market_state.bettor_balance != 0 {
-                return Err(ExchangeError::MarketBettorBalanceRemaining.into());
-            }
+            // msg!("Market pending bets are settled. Asserting.");
+            // if market_state.market_sides[market_state.result as usize].risk != 0 {
+            //     return Err(ExchangeError::MarketSideRiskRemaining.into());
+            // }
+            // if market_state.market_sides[market_state.result as usize].payout != 0 {
+            //     return Err(ExchangeError::MarketSidePayoutRemaining.into());
+            // }
+            // if market_state.bettor_balance != 0 {
+            //     return Err(ExchangeError::MarketBettorBalanceRemaining.into());
+            // }
         }
 
         //Assert that when all of the house pool pending bets are settled there is
         //no remaining bettor balance in the house pool.
         if pool_state.pending_bets == 0 {
-            msg!("House pool pending bets are settled. Asserting.");
-            if pool_state.locked_liquidity != 0 {
-                return Err(ExchangeError::HousePoolLockedLiquidityRemaining.into());
-            }
-            if pool_state.live_liquidity != 0 {
-                return Err(ExchangeError::HousePoolLockedLiquidityRemaining.into());
-            }
+            // msg!("House pool pending bets are settled. Asserting.");
+            // if pool_state.locked_liquidity != 0 {
+            //     return Err(ExchangeError::HousePoolLockedLiquidityRemaining.into());
+            // }
+            // if pool_state.live_liquidity != 0 {
+            //     return Err(ExchangeError::HousePoolLockedLiquidityRemaining.into());
+            // }
         }
 
         BettingPoolState::pack(pool_state, &mut bet_pool_state_account.data.borrow_mut())?;
@@ -549,12 +550,12 @@ impl Processor {
 
         // Checking house pool usdt account
         if *hp_usdt_account.key != pool_state.house_pool_usdt {
-            return Err(ExchangeError::InvalidPoolUsdtAccount.into());
+            return Err(ExchangeError::InvalidHousePoolUsdtAccount.into());
         }
 
         // Checking bet pool usdt account
         if *bet_usdt_account.key != pool_state.betting_pool_usdt {
-            return Err(ExchangeError::InvalidPoolUsdtAccount.into());
+            return Err(ExchangeError::InvalidHousePoolUsdtAccount.into());
         }
         if *insurance_fund_usdt_account.key != pool_state.insurance_fund_usdt {
             return Err(ExchangeError::InvalidInsuranceFundUsdtAccount.into());
@@ -577,8 +578,8 @@ impl Processor {
             return Err(ExchangeError::NotValidAuthority.into());
         }
         //Checking if market is not settled yet
-        if market_state.result != MoneylineMarketOutcome::NotYetCommenced
-            || market_state.result != MoneylineMarketOutcome::Commenced
+        //TODO check if market is not commenced  and issue a different warning
+        if market_state.result != MoneylineMarketOutcome::Commenced
         {
             return Err(ExchangeError::MarketAlreadySettled.into());
         }
@@ -609,18 +610,29 @@ impl Processor {
             .risk
             .checked_add(market_state.market_sides[new_market_result as usize].payout)
             .ok_or(ExchangeError::AmountOverflow)?;
-
+        
+        msg!("- New bettor balance");
+        msg!(0, 0, 0, 0, new_bettor_balance);
+        msg!("- Current bettor balance");
+        msg!(0, 0, 0, 0, new_bettor_balance);
         if new_bettor_balance < current_bettor_balance {
             // The house has made money
+            msg!("House made money");
             let house_profit = current_bettor_balance
                 .checked_sub(new_bettor_balance)
                 .ok_or(ExchangeError::AmountOverflow)?;
+
+            let locked_liquidity = market_state.locked_liquidity;
             let house_profit_frac: U64F64 = U64F64::from_num(house_profit);
 
             let insurance_fund_fee: u64 = (house_profit_frac * U64F64::from_num(0.01))
                 .checked_to_num()
                 .ok_or(ExchangeError::AmountOverflow)?;
             let divvy_foundation_fee: u64 = (house_profit_frac * U64F64::from_num(0.05))
+                .checked_to_num()
+                .ok_or(ExchangeError::AmountOverflow)?;
+
+            let total_house_profit: u64 = (house_profit_frac * U64F64::from_num(0.94))
                 .checked_to_num()
                 .ok_or(ExchangeError::AmountOverflow)?;
 
@@ -648,7 +660,7 @@ impl Processor {
                     pda_account.clone(),
                     token_program.clone(),
                 ],
-                &[&[b"divvybetting", &[bump_seed]]],
+                &[&[b"divvybetting", &[255]]],
             )?;
             msg!("Transfering USDT to the Divvy foundation");
             let transfer_instruction = transfer(
@@ -667,7 +679,27 @@ impl Processor {
                     pda_account.clone(),
                     token_program.clone(),
                 ],
-                &[&[b"divvybetting", &[bump_seed]]],
+                &[&[b"divvybetting", &[255]]],
+            )?;
+
+            msg!("Transfering house profit and locked liquidity to house pool");
+            let transfer_instruction = transfer(
+                &token_program.key,
+                &bet_usdt_account.key,
+                &hp_usdt_account.key,
+                &pda_account.key,
+                &[&pda_account.key],
+                (total_house_profit+locked_liquidity).clone(),
+            )?;
+            invoke_signed(
+                &transfer_instruction,
+                &[
+                    bet_usdt_account.clone(),
+                    hp_usdt_account.clone(),
+                    pda_account.clone(),
+                    token_program.clone(),
+                ],
+                &[&[b"divvybetting", &[255]]],
             )?;
         }
 
@@ -744,6 +776,7 @@ impl Processor {
         }
         // Unpack token accounts to verify their length
         msg!("Check token account accounts length");
+        TokenAccount::unpack(&hp_usdt_account.data.borrow())?;
         TokenAccount::unpack(&bet_usdt_account.data.borrow())?;
         TokenAccount::unpack(&insurance_fund_usdt_account.data.borrow())?;
         TokenAccount::unpack(&divvy_foundation_proceeds_usdt.data.borrow())?;
@@ -777,31 +810,35 @@ impl Processor {
     ) -> ProgramResult {
         let accounts_iter = &mut accounts.iter();
         let initializer = next_account_info(accounts_iter)?;
+        msg!("Check if initializer is a signer");
         if !initializer.is_signer {
             return Err(ProgramError::MissingRequiredSignature);
         }
+        msg!("Check authority");
         if initializer.key != &authority::ID {
             return Err(ExchangeError::NotValidAuthority.into());
         }
         let market_state_account = next_account_info(accounts_iter)?;
-        
-
         let token_program = next_account_info(accounts_iter)?;
         let pda_account = next_account_info(accounts_iter)?;
         let bet_pda_account = next_account_info(accounts_iter)?;
         let betting_usdt_account = next_account_info(accounts_iter)?;
         let pool_usdt_account = next_account_info(accounts_iter)?;
         let pool_state_account = next_account_info(accounts_iter)?;
-
         let bet_pool_state_account = next_account_info(accounts_iter)?;
+        let divvy_hp_program = next_account_info(accounts_iter)?;
 
         let mut market_state = Market::unpack(&market_state_account.data.borrow())?;
         let mut pool_state = BettingPoolState::unpack(&bet_pool_state_account.data.borrow())?;
+
+        //Check house pool porgram ID
+        // divvy_house_program_id::ID
 
         //Checking if betting is frozen: Should we?
         if pool_state.frozen_betting {
             return Err(ExchangeError::BettingFrozen.into());
         }
+        msg!("Check market commence status");
         if market_state.result != MoneylineMarketOutcome::NotYetCommenced {
             return Err(ExchangeError::MarketCommenced.into());
         }
@@ -817,25 +854,26 @@ impl Processor {
         let mut accounts = Vec::with_capacity(5 + signer_pubkeys.len());
         accounts.push(AccountMeta::new(*token_program.key, false));
         accounts.push(AccountMeta::new(*pda_account.key, false));
-        accounts.push(AccountMeta::new(*bet_pda_account.key, false));
         for signer_pubkey in signer_pubkeys.iter() {
             accounts.push(AccountMeta::new_readonly(**signer_pubkey, true));
         }
+        accounts.push(AccountMeta::new(*betting_usdt_account.key, false));
         accounts.push(AccountMeta::new(*pool_usdt_account.key, false));
         accounts.push(AccountMeta::new(*pool_state_account.key, false));
 
         let instruction = Instruction {
-            program_id: divvy_house_program_id::ID,
+            program_id: *divvy_hp_program.key,
             accounts,
             data,
         };
-
+        msg!("Transfer locked liquidity");
         invoke_signed(
                 &instruction,
                 &[
                     token_program.clone(),
                     pda_account.clone(),
                     bet_pda_account.clone(),
+                    betting_usdt_account.clone(),
                     pool_usdt_account.clone(),
                     pool_state_account.clone(),
                 ],

@@ -5,14 +5,14 @@ import fs from 'fs'
 import path from "path";
 import { createNewToken } from "./createToken";
 import { createTokenAccount } from "./createTokenAccount";
-const DIVVY_PROGRAM_ID = new PublicKey("FatTSDYddftPGBVCoV6Uu2aCiMg8B8ZxV3QuoxE2PK6U")
-const payerAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.resolve("../divvy.json"), 'utf-8'))), { skipValidation: true })
-const insuranceAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.resolve("../insurance.json"), 'utf-8'))), { skipValidation: true })
-const profitsAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.resolve("../profits.json"), 'utf-8'))), { skipValidation: true })
+export const DIVVY_PROGRAM_ID = new PublicKey("FatTSDYddftPGBVCoV6Uu2aCiMg8B8ZxV3QuoxE2PK6U")
+export const payerAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.resolve("../divvy.json"), 'utf-8'))), { skipValidation: true })
 const bool = (property = "bool") => {
     return blob(1, property);
 };
-
+const bet_usdt_account = new PublicKey("4ywpRYXFtNizjBZE4F4MjyAgWbZB6DgLun3J8nzQdW1p")
+const usdt = new PublicKey("7cnY6yuFXzTLEsnXn4FkgvmXq4FyuUakQDQqHJkbQvYG")
+const ht_mint = new PublicKey("GhsGHEaKoVb2iX9GwsZYJYbBRDnDCzrRCQkWYsTqCPdy")
 /**
  * Layout for a 64bit unsigned value
  */
@@ -21,12 +21,9 @@ const uint64 = (property = "uint64") => {
 };
 export const STATE_ACCOUNT_DATA_LAYOUT = struct([
     bool("isInitialized"),
-    uint64("lockedLiquidity"),
-    uint64("liveLiquidity"),
     blob(32, "htMint"),
+    blob(32, "bettingUsdt"),
     blob(32, "poolUsdt"),
-    blob(32, "insuranceFundUsdt"),
-    blob(32, "divvyFoundationProceedsUsdt"),
     bool("frozenPool"),
 ]);
 
@@ -50,11 +47,12 @@ function toCluster(cluster: string): Cluster {
     }
     throw new Error("Invalid cluster provided.");
 }
+export let cluster = 'devnet';
+export let url = clusterApiUrl(toCluster(cluster), true);
+export let connection = new Connection(url, 'processed');
+
 const main = async () => {
     const [pda, bumpSeed] = await PublicKey.findProgramAddress([Buffer.from("divvyhouse")], DIVVY_PROGRAM_ID);
-    let cluster = 'devnet';
-    let url = clusterApiUrl(toCluster(cluster), true);
-    let connection = new Connection(url, 'processed');
     console.log("PDA", pda.toString())
 
     const hp_state_account = Keypair.generate();
@@ -71,15 +69,8 @@ const main = async () => {
         newAccountPubkey: hp_state_account.publicKey,
         programId: DIVVY_PROGRAM_ID
     });
-    const ht = await createNewToken(payerAccount, pda.toString(), pda.toString(), 6, connection);
-    console.log("House token address:", ht);
-    const usdt = await createNewToken(payerAccount, payerAccount.publicKey.toString(), payerAccount.publicKey.toString(), 6, connection);
-    console.log("USDT token address:", usdt);
 
-    const insuranceUSDTAccount = await createTokenAccount(payerAccount, usdt, insuranceAccount.publicKey.toString(), connection)
-    const profitsUSDTAccount = await createTokenAccount(payerAccount, usdt, profitsAccount.publicKey.toString(), connection)
-    const ht_mint = new PublicKey(ht)
-    const pool_usdt_account = await createTokenAccount(payerAccount, usdt, pda.toString(), connection)
+    const pool_usdt_account = await createTokenAccount(payerAccount, usdt, pda, connection)
     console.log("HP USDT ACCOUNT:", pool_usdt_account.toString());
     const dataBuffer = Buffer.alloc(INIT_PROGRAM_LAYOUT.span);
     INIT_PROGRAM_LAYOUT.encode(data, dataBuffer);
@@ -88,10 +79,8 @@ const main = async () => {
             { pubkey: payerAccount.publicKey, isSigner: true, isWritable: true },
             { pubkey: hp_state_account.publicKey, isSigner: false, isWritable: true },
             { pubkey: ht_mint, isSigner: false, isWritable: true },
+            { pubkey: bet_usdt_account, isSigner: false, isWritable: true },
             { pubkey: pool_usdt_account, isSigner: false, isWritable: true },
-            { pubkey: insuranceUSDTAccount, isSigner: false, isWritable: true },
-            { pubkey: profitsUSDTAccount, isSigner: false, isWritable: true },
-
         ],
         programId: DIVVY_PROGRAM_ID,
         data: dataBuffer,
