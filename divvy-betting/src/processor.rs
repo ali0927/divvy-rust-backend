@@ -327,6 +327,7 @@ impl Processor {
             .ok_or(ExchangeError::AmountOverflow)?;
 
         msg!("Decrementing betting pool pending bets.");
+        msg!(" {} ",pool_state.pending_bets);
         pool_state.pending_bets = pool_state
             .pending_bets
             .checked_sub(1)

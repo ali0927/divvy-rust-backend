@@ -8,7 +8,7 @@ const DIVVY_PROGRAM_ID = new PublicKey("2u9dGXkuj5iTm6B9MRn1Exx55uEYX1ZmM3xda5S3
 const payerAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.resolve("../divvy.json"), 'utf-8'))), { skipValidation: true })
 const insuranceAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.resolve("../insurance.json"), 'utf-8'))), { skipValidation: true })
 const profitsAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.resolve("../profits.json"), 'utf-8'))), { skipValidation: true })
-const hp_usdt_account = new PublicKey("6XgxN12L9AuAn12bZp56c2Ca2XUokSw1GXv5ceSGX763");
+const hp_usdt_account = new PublicKey("qZwdvpDMCy5pptCEfBZLfnPPzmnFPNZ6iALx7VwJSoB");
 const USDT_MINT = new PublicKey("7cnY6yuFXzTLEsnXn4FkgvmXq4FyuUakQDQqHJkbQvYG")
 const bool = (property = "bool") => {
     return blob(1, property);
@@ -78,7 +78,7 @@ const main = async () => {
 
     const insuranceUSDTAccount = await createTokenAccount(payerAccount, USDT_MINT, insuranceAccount.publicKey.toString(), connection)
     const profitsUSDTAccount = await createTokenAccount(payerAccount, USDT_MINT, profitsAccount.publicKey.toString(), connection)
-    const bet_pool_usdt_account = new PublicKey("4ywpRYXFtNizjBZE4F4MjyAgWbZB6DgLun3J8nzQdW1p");
+    const bet_pool_usdt_account = new PublicKey("E8uax62mJk8s8idaLh8zXRKEsD2VVEAtL8SUEdet9Wbd");
     // await createTokenAccount(payerAccount, USDT_MINT, pda.toString(), connection)
     // console.log("Bet USDT ACCOUNT:", bet_pool_usdt_account.toString());
     const dataBuffer = Buffer.alloc(INIT_PROGRAM_LAYOUT.span);

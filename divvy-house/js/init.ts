@@ -10,9 +10,9 @@ export const payerAccount = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.
 const bool = (property = "bool") => {
     return blob(1, property);
 };
-const bet_usdt_account = new PublicKey("4ywpRYXFtNizjBZE4F4MjyAgWbZB6DgLun3J8nzQdW1p")
+const bet_usdt_account = new PublicKey("E8uax62mJk8s8idaLh8zXRKEsD2VVEAtL8SUEdet9Wbd")
 const usdt = new PublicKey("7cnY6yuFXzTLEsnXn4FkgvmXq4FyuUakQDQqHJkbQvYG")
-const ht_mint = new PublicKey("GhsGHEaKoVb2iX9GwsZYJYbBRDnDCzrRCQkWYsTqCPdy")
+const ht_mint = new PublicKey("CNz7u64CYdE7ZZeYasuaeCbEWx2wz6Lg8WH3Xaa25X1A")
 /**
  * Layout for a 64bit unsigned value
  */
